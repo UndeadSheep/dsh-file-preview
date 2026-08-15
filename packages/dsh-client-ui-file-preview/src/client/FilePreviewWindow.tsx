@@ -82,28 +82,54 @@ function MarkdownImage(props: {
   baseDir: string
 }): React.ReactElement {
   const { src, alt, title, width, height, remote, sessionId, baseDir } = props
-  const [resolved, setResolved] = useState<string | undefined>(() => {
-    if (sessionId === undefined || src === undefined || isExternalImage(src)) return src
-    const key = `${String(sessionId)}::${resolveImagePath(baseDir, src)}`
-    return imageCache.get(key) ?? src
-  })
+  const imgRef = useRef<HTMLImageElement>(null)
+  const external = src !== undefined && isExternalImage(src)
+  const localPath = !external && sessionId !== undefined && src !== undefined
+    ? resolveImagePath(baseDir, src)
+    : undefined
+  const cacheKey = localPath !== undefined && sessionId !== undefined
+    ? `${String(sessionId)}::${localPath}`
+    : undefined
+  // External/data images render immediately; local images start empty and fill in lazily.
+  const [resolved, setResolved] = useState<string | undefined>(() =>
+    external ? src : cacheKey !== undefined ? imageCache.get(cacheKey) : undefined)
+  const [shouldLoad, setShouldLoad] = useState<boolean>(external || resolved !== undefined)
+
+  // For local images, kick off loading once the element enters (or approaches) the viewport.
   useEffect(() => {
-    if (sessionId === undefined || src === undefined || isExternalImage(src)) return
-    const path = resolveImagePath(baseDir, src)
-    const key = `${String(sessionId)}::${path}`
-    if (imageCache.has(key)) return
+    if (shouldLoad || external) return
+    const el = imgRef.current
+    if (el === null) return
+    if (typeof IntersectionObserver === 'undefined') { setShouldLoad(true); return }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setShouldLoad(true)
+        observer.disconnect()
+      }
+    }, { rootMargin: '200px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [shouldLoad, external])
+
+  // Fetch the local image once it should load and isn't already resolved.
+  useEffect(() => {
+    if (!shouldLoad || external || resolved !== undefined) return
+    if (localPath === undefined || sessionId === undefined || cacheKey === undefined) return
+    const cached = imageCache.get(cacheKey)
+    if (cached !== undefined) { setResolved(cached); return }
     let cancelled = false
     void (async () => {
-      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path }))
+      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path: localPath }))
       if (!cancelled && res.ok) {
         const url = `data:${res.value.mimeType};base64,${res.value.data}`
-        imageCache.set(key, url)
+        cacheImage(cacheKey, url)
         setResolved(url)
       }
     })()
     return () => { cancelled = true }
-  }, [src, baseDir, remote, sessionId])
-  return <img src={resolved} alt={alt} title={title} width={width} height={height} />
+  }, [shouldLoad, external, resolved, cacheKey, localPath, remote, sessionId])
+
+  return <img ref={imgRef} src={resolved} alt={alt} title={title} width={width} height={height} />
 }
 
 /** Renders a fenced code block with syntax highlighting. */
@@ -127,8 +153,27 @@ const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInter
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm]
 const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypeSanitize]
 
+/** Resolved-image cache budget (base64 chars across all entries); oldest entries are evicted beyond it. */
+const IMAGE_CACHE_CHAR_BUDGET = 16 * 1024 * 1024
+
 /** Resolved-image cache (session + resolved path → data URL) so remounts don't re-fetch or flicker. */
 const imageCache = new Map<string, string>()
+let imageCacheChars = 0
+
+/** Store a resolved image data URL, evicting the oldest entries past the char budget. */
+function cacheImage(key: string, url: string): void {
+  const previous = imageCache.get(key)
+  if (previous !== undefined) imageCacheChars -= previous.length
+  imageCache.set(key, url)
+  imageCacheChars += url.length
+  while (imageCacheChars > IMAGE_CACHE_CHAR_BUDGET && imageCache.size > 1) {
+    const oldest = imageCache.keys().next().value
+    if (oldest === undefined) break
+    const dropped = imageCache.get(oldest)
+    imageCache.delete(oldest)
+    if (dropped !== undefined) imageCacheChars -= dropped.length
+  }
+}
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi)
