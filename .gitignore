@@ -1,0 +1,9 @@
+# 打包产物
+*.tgz
+
+# 依赖
+node_modules/
+
+# 系统杂项
+Thumbs.db
+.DS_Store

@@ -1,0 +1,18 @@
+# @undeadsheep/dsh-file-preview — bundle layer.
+#
+# This is the out-of-tree equivalent of the two rows the in-box
+# `dsh-web-app` bundle mounts for the file-preview surface:
+#
+#   - id: file-preview    -> the Host Typert Remote service (this package)
+#   - id: ui-file-preview -> the browser floating-window UI (client dependency)
+#
+# The client package has no `dsh.bundle` of its own: it is installed as a
+# plain dependency of this bundle and discovered through its `dsh.client`
+# manifest (the modules node half scans the composed tree for `dsh.client`
+# rows and serves their `/client` bundles into window.__DSH_BOOT__).
+- insert:
+    - id: file-preview
+      name: '@undeadsheep/dsh-file-preview'
+
+    - id: ui-file-preview
+      name: '@undeadsheep/dsh-client-ui-file-preview'
