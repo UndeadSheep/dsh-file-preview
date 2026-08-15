@@ -6,6 +6,7 @@
     "build": "npm run build:host && npm run build:client",
     "build:host": "tsc -b tsconfig.host.json && tsdown --env.DSH_BUILD_FACE host",
     "build:client": "tsc -b tsconfig.client.json && tsdown --env.DSH_BUILD_FACE client",
+    "dev": "node scripts/dev.mjs",
     "watch": "tsdown --watch"
   },
   "devDependencies": {

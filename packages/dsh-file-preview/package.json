@@ -42,6 +42,7 @@
     }
   },
   "dependencies": {
+    "@undeadsheep/dsh-client-ui-file-preview": "workspace:^",
     "@deepseek-ai/schemastery": "^3.18.1",
     "zod": "^4.4.3"
   },

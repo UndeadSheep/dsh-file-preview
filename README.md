@@ -79,16 +79,18 @@ pnpm build        # = build:host + build:client
 
 > 依赖的 `@deepseek-ai/*` 是官方已发布包，从 npm 解析（见根 `package.json` devDependencies）。
 
-## 本地验证
+## 本地验证（一键）
+
+改完源码后，一条命令构建 + 打包 + 装进干净的 dsh profile（自动处理「测试形态」的客户端依赖）：
 
 ```powershell
-pnpm build
-# 分别 pack 出两个 tarball，再装（顺序：先客户端后宿主）
-cd packages\dsh-client-ui-file-preview; pnpm pack; cd ..\..
-cd packages\dsh-file-preview;        pnpm pack; cd ..\..
-dsh plugin --profile demo add .\packages\dsh-client-ui-file-preview\undeadsheep-dsh-client-ui-file-preview-0.1.0-rc.1.tgz .\packages\dsh-file-preview\undeadsheep-dsh-file-preview-0.1.0-rc.1.tgz
-dsh web --port 3090
+pnpm dev
 ```
+
+然后按提示运行 `dsh web --port 3090` 看效果。
+
+> `pnpm dev` 会：构建 → 临时去掉宿主对客户端的依赖 → `pnpm pack` 两个 tarball → 恢复宿主依赖 →
+> 装进 `%TEMP%\dsh-dev-profile` → 打印启动命令。它不改动仓库的「发布形态」，只在你本地临时切换。
 
 ## 发布到 npm
 
