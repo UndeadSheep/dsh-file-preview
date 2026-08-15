@@ -4,6 +4,7 @@
     "noEmit": true,
     "rewriteRelativeImportExtensions": false
   },
+  "include": [],
   "references": [
     { "path": "./packages/dsh-file-preview" }
   ]

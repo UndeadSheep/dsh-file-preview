@@ -5,6 +5,7 @@
     "rewriteRelativeImportExtensions": false,
     "types": ["node"]
   },
+  "include": [],
   "references": [
     { "path": "./packages/dsh-client-ui-file-preview" }
   ]
