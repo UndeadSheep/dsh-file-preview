@@ -8,8 +8,9 @@ node_modules/
 *.tsbuildinfo
 
 # vendored 协议 src/ 里泄漏的编译产物（源码只有 .ts）
-packages/dsh-typert-protocol/src/*
-!packages/dsh-typert-protocol/src/*.ts
+packages/dsh-typert-protocol/src/*.js
+packages/dsh-typert-protocol/src/*.map
+packages/dsh-typert-protocol/src/*.d.ts
 
 # 打包产物
 *.tgz
