@@ -13,11 +13,24 @@
 - [`@undeadsheep/dsh-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-file-preview) — 组合包（bundle）+ 宿主服务
 - [`@undeadsheep/dsh-client-ui-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-client-ui-file-preview) — 客户端 UI
 
-用户安装：
+## 安装
+
+只需一条命令（pnpm 会自动把客户端依赖一起装上）：
 
 ```powershell
 dsh plugin --profile web add @undeadsheep/dsh-file-preview
 ```
+
+装完启动 / 重启 Web：
+
+```powershell
+dsh web
+```
+
+打开页面后，点会话头部右上角的「文件预览」按钮，即可打开悬浮预览窗口。
+
+> 说明：上面的命令会把组合包 `@undeadsheep/dsh-file-preview` 和它的客户端
+> `@undeadsheep/dsh-client-ui-file-preview` 一起安装，用户无需手动装客户端。
 
 ## 界面截图
 
