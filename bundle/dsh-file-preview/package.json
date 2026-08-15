@@ -2,6 +2,7 @@
   "name": "@undeadsheep/dsh-file-preview",
   "version": "0.1.0-rc.0",
   "description": "Workspace file tree listing and text preview/editing backed by a Host Remote for the DeepSeek Harness (distributable bundle: host service + client UI)",
+  "author": "UndeadSheep",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

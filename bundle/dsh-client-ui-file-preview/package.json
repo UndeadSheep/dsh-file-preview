@@ -2,6 +2,7 @@
   "name": "@undeadsheep/dsh-client-ui-file-preview",
   "version": "0.1.0-rc.0",
   "description": "Floating workspace file-preview window for the DeepSeek Harness web client",
+  "author": "UndeadSheep",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

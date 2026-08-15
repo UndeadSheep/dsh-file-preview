@@ -74,3 +74,10 @@ dsh plugin --profile web add @undeadsheep/dsh-file-preview
 
 - **git 安装（`dsh plugin add github:...`）未实现**：当前只分发预构建产物（npm / tarball）。
   git 安装需要单包仓库 + 自包含 `prepare` 构建脚本。
+
+## 作者与许可
+
+- 作者：UndeadSheep
+- 许可：[MIT](LICENSE) —— 可自由使用/修改/分发，但需保留本版权声明与署名。
+- 社区收录：本仓库添加 GitHub topic `dsh-plugin` 后，会被 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+  等社区列表与 topic 搜索收录。
