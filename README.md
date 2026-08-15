@@ -48,12 +48,14 @@ dsh web
 │   │   ├── src/                       #   宿主源码
 │   │   ├── cordis.patch.yml           #   dsh.bundle 层（插入 file-preview + ui-file-preview 两行）
 │   │   └── package.json / tsconfig.json
-│   └── dsh-client-ui-file-preview/    # 客户端：浏览器悬浮窗 UI
-│       ├── src/                       #   客户端源码（含 CSS Module）
-│       └── package.json / tsconfig.json / tsdown.config.ts
+│   ├── dsh-client-ui-file-preview/    # 客户端：浏览器悬浮窗 UI
+│   │   ├── src/                       #   客户端源码（含 CSS Module）
+│   │   └── package.json / tsconfig.json / tsdown.config.ts
+│   └── dsh-typert-protocol/           # vendor 的协议源码（仅构建期，让 typert 生成器识别 @Remote）
 ├── build/                             # vendor 的构建辅助（clientBundle 预设 + platform 清单）
 ├── tsconfig.{base,base.client,host,client}.json
 ├── tsdown.config.ts                   # 根构建（workspace 模式，跑 Typert 代码生成）
+├── scripts/                           # dev.mjs 一键开发脚本
 ├── assets/  docs/  test-fixtures/
 └── LICENSE / THIRD_PARTY_NOTICES.md
 ```
@@ -113,6 +115,7 @@ pnpm dev
 
 - 作者：UndeadSheep
 - 许可：[MIT](LICENSE) —— 可自由使用/修改/分发，但需保留本版权声明与署名。
-- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 构建产物内嵌了 zod（MIT）。
+- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 内嵌 zod（MIT）+ vendor 的
+  `@deepseek-ai/dsh-typert-protocol` 源码（MIT）。
 - 社区收录：本仓库添加 GitHub topic `dsh-plugin` 后，会被 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
   等社区列表与 topic 搜索收录。
