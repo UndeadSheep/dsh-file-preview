@@ -32,8 +32,7 @@ dsh plugin --profile web add @undeadsheep/dsh-file-preview
 │   ├── assemble-bundle.ps1            # 从 fork 构建产物组装 + 改名 @undeadsheep/*
 │   └── legacy/                        # 早期开发用的同步/修复脚本，仅存档
 ├── docs/
-│   ├── file-preview-INTEGRATION.md    # 集成到 monorepo 的说明
-│   └── guide.md
+│   └── file-preview-INTEGRATION.md    # 集成到 monorepo 的说明
 └── test-fixtures/                     # 悬浮窗测试样例文件
 ```
 
@@ -70,11 +69,6 @@ dsh plugin --profile web add @undeadsheep/dsh-file-preview
    Set-Location .\bundle\dsh-client-ui-file-preview; npm publish --access public --tag latest
    Set-Location .\bundle\dsh-file-preview;        npm publish --access public --tag latest
    ```
-
-## 本地测试（未发布前）
-
-见 `bundle/README.md` 的「本地测试」一节：本地 `dsh plugin add` 需临时把客户端从 bundle 的
-`dependencies` 移除、分两步装 tarball（pnpm 不会拿 `file:` 包去满足 semver 范围）。
 
 ## 已知限制
 
