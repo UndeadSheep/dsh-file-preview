@@ -3,7 +3,7 @@
  * dev.mjs — 一键本地开发验证：构建 → 打包 → 装进干净的 dsh profile → 打印启动命令。
  * 贡献者改完源码后跑 `pnpm dev` 即可把最新改动装进官方 dsh 看效果。
  */
-import { execSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -50,5 +50,24 @@ const env = { ...process.env, DSH_HOME: home }
 run('dsh', ['plugin', '--profile', 'web', 'add', clientTgz], { env })
 run('dsh', ['plugin', '--profile', 'web', 'add', hostTgz], { env })
 
-console.log('\n✓ 已装进临时 profile。验证：')
-console.log('  dsh web --port 3090')
+// 6. 解析参数：--port <n> 换端口；--no-start 只打印命令、不自动起服务。
+const args = process.argv.slice(2)
+const portIdx = args.indexOf('--port')
+const rawPort = portIdx >= 0 ? Number(args[portIdx + 1]) : 3090
+const port = Number.isInteger(rawPort) && rawPort > 0 && rawPort < 65536 ? rawPort : 3090
+const noStart = args.includes('--no-start')
+
+console.log(`\n✓ 已装进临时 profile（DSH_HOME=${home}）。`)
+if (noStart) {
+  // 手动启动时必须带上同一个 DSH_HOME，否则 dsh web 会读 ~/.dsh（没有本插件）。
+  console.log('  手动验证（PowerShell）：')
+  console.log(`  $env:DSH_HOME = "${home}"; dsh web --port ${port}`)
+  console.log('  手动验证（bash/zsh）：')
+  console.log(`  DSH_HOME="${home}" dsh web --port ${port}`)
+} else {
+  console.log(`  启动 dsh web：http://127.0.0.1:${port}（Ctrl+C 停止）\n`)
+  // 用整条命令字符串（而非 args 数组）+ shell，避免 node 的 DEP0190 注入告警。
+  // port 已在上面校验为正整数，不会拼接进任何非数字内容。
+  const child = spawn(`dsh web --port ${port}`, { cwd: root, stdio: 'inherit', shell: true, env })
+  child.on('exit', (code) => { process.exit(code ?? 0) })
+}

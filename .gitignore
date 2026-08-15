@@ -18,3 +18,6 @@ packages/dsh-typert-protocol/src/*.d.ts
 # 系统杂项
 Thumbs.db
 .DS_Store
+
+# 调试工具产物
+.playwright-cli/

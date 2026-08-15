@@ -83,16 +83,19 @@ pnpm build        # = build:host + build:client
 
 ## 本地验证（一键）
 
-改完源码后，一条命令构建 + 打包 + 装进干净的 dsh profile（自动处理「测试形态」的客户端依赖）：
+改完源码后，一条命令构建 + 打包 + 装进干净的 dsh profile 并自动起 `dsh web`（自动处理「测试形态」的客户端依赖）：
 
 ```powershell
 pnpm dev
 ```
 
-然后按提示运行 `dsh web --port 3090` 看效果。
+启动后浏览器访问 `http://127.0.0.1:3090` 看效果（Ctrl+C 停止）。换端口用 `pnpm dev --port 3091`；只想构建+安装、不自动起服务用 `pnpm dev --no-start`（会打印带 `DSH_HOME` 的手动启动命令）。
 
 > `pnpm dev` 会：构建 → 临时去掉宿主对客户端的依赖 → `pnpm pack` 两个 tarball → 恢复宿主依赖 →
-> 装进 `%TEMP%\dsh-dev-profile` → 打印启动命令。它不改动仓库的「发布形态」，只在你本地临时切换。
+> 装进 `%TEMP%\dsh-dev-profile` → 用该 profile 起 `dsh web`。它不改动仓库的「发布形态」，只在你本地临时切换。
+>
+> ⚠️ 手动起服务时必须带上同一个 `DSH_HOME`（见 `--no-start` 打印的命令），否则 `dsh web` 读的是 `~/.dsh`
+> ——那里没有本插件，就会「看不到文件预览按钮」。
 
 ## 发布到 npm
 
