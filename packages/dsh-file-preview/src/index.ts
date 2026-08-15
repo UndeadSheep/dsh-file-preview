@@ -54,7 +54,7 @@ const MAX_DEPTH = 12
 const MAX_TREE_NODES = 5000
 /** Directory names to skip while walking: heavy/noise trees that drown the sidebar. */
 const SKIP_DIRS = new Set([
-  'node_modules', '.pnpm', '.git', '.hg', '.svn',
+  'node_modules', '.pnpm', '.pnpm-store', '.yarn', '.git', '.hg', '.svn',
   '.next', '.nuxt', '.cache', '.parcel-cache', '.turbo',
   '.venv', 'venv', '__pycache__', '.idea', '.vscode',
 ])
@@ -107,6 +107,10 @@ export class FilePreviewService extends TypertRemoteService {
   ): Promise<FileTreeNode[]> {
     const entries = await this.ctx.fs.listDir(target)
     const nodes: FileTreeNode[] = []
+    // Collect directories and walk them only after this directory's own entries,
+    // so a heavy subtree cannot starve sibling files out of the tree: budget
+    // truncation then only drops directories that come after the budget-eater.
+    const dirs: Array<{ target: FsTarget; name: string; childRel: string }> = []
     for (const entry of entries) {
       if (budget.remaining <= 0) break
       budget.remaining--
@@ -115,10 +119,7 @@ export class FilePreviewService extends TypertRemoteService {
       const childRel = rel ? `${rel}/${name}` : name
       if (entry.type === 'directory') {
         if (SKIP_DIRS.has(name)) continue
-        const children = depth > 0
-          ? await this.walk(entry.target, childRel, depth - 1, budget).catch(() => [])
-          : []
-        nodes.push({ type: 'dir', name, path: childRel, children })
+        dirs.push({ target: entry.target, name, childRel })
       } else if (entry.type === 'file') {
         nodes.push(entry.size === undefined
           ? { type: 'file', name, path: childRel }
@@ -128,6 +129,13 @@ export class FilePreviewService extends TypertRemoteService {
           ? { type: 'other', name, path: childRel }
           : { type: 'other', name, path: childRel, size: entry.size })
       }
+    }
+    for (const dir of dirs) {
+      if (budget.remaining <= 0) break
+      const children = depth > 0
+        ? await this.walk(dir.target, dir.childRel, depth - 1, budget).catch(() => [])
+        : []
+      nodes.push({ type: 'dir', name: dir.name, path: dir.childRel, children })
     }
     nodes.sort((a, b) => {
       if (a.type === 'dir' && b.type !== 'dir') return -1
