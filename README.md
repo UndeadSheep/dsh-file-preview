@@ -79,5 +79,6 @@ dsh plugin --profile web add @undeadsheep/dsh-file-preview
 
 - 作者：UndeadSheep
 - 许可：[MIT](LICENSE) —— 可自由使用/修改/分发，但需保留本版权声明与署名。
+- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 构建产物内嵌了 zod（MIT）。
 - 社区收录：本仓库添加 GitHub topic `dsh-plugin` 后，会被 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
   等社区列表与 topic 搜索收录。
