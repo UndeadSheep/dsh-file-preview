@@ -1,5 +1,7 @@
 # file-peek 👀
 
+> 昵称 `file-peek` · 正式仓库/npm 名 `dsh-file-preview`
+
 <p align="center">
   <img src="assets/pink-haired-maid-books-readme.png" alt="file-peek 吉祥物：粉发女仆抱着一摞书快摔倒" width="480" />
 </p>
