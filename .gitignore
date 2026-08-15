@@ -1,9 +1,14 @@
 # 依赖
 node_modules/
 .pnpm/
+.pnpm-store/
 
-# 构建产物
-lib/
+# 构建产物（忽略所有 lib/ 下的产物，但保留预生成的 typert 声明）
+**/lib/*
+!**/lib/typert.host.js
+!**/lib/typert.host.d.ts
+!**/lib/typert.remote-client.js
+!**/lib/typert.remote-client.d.ts
 *.tsbuildinfo
 
 # 打包产物

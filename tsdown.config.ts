@@ -1,5 +1,4 @@
 import { defineConfig } from 'tsdown'
-import { typertPlugin } from '@deepseek-ai/dsh-typert-generator/tsdown'
 
 function isBuildFaceClient(value: unknown): boolean {
   if (value === undefined || value === 'host') return false
@@ -19,6 +18,5 @@ export default defineConfig(({ env }) => {
     fixedExtension: false,
     dts: false,
     clean: false,
-    plugins: client ? [] : [typertPlugin({ mode: 'workspace', faces: ['host'] })],
   }
 })
