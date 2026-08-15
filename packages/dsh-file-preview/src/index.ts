@@ -50,6 +50,14 @@ declare module '@deepseek-ai/cordis' {
 const DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_DEPTH = 12
+/** Stop descending once the tree has this many nodes, to bound worst-case walk cost. */
+const MAX_TREE_NODES = 5000
+/** Directory names to skip while walking: heavy/noise trees that drown the sidebar. */
+const SKIP_DIRS = new Set([
+  'node_modules', '.pnpm', '.git', '.hg', '.svn',
+  '.next', '.nuxt', '.cache', '.parcel-cache', '.turbo',
+  '.venv', 'venv', '__pycache__', '.idea', '.vscode',
+])
 
 /** Map an image path extension to a browser-safe MIME type. */
 function mimeFor(path: string): string {
@@ -91,16 +99,24 @@ export class FilePreviewService extends TypertRemoteService {
   }
 
   /** Recursively list a directory into the wire tree shape (directories first). */
-  private async walk(target: FsTarget, rel: string, depth: number): Promise<FileTreeNode[]> {
+  private async walk(
+    target: FsTarget,
+    rel: string,
+    depth: number,
+    budget: { remaining: number },
+  ): Promise<FileTreeNode[]> {
     const entries = await this.ctx.fs.listDir(target)
     const nodes: FileTreeNode[] = []
     for (const entry of entries) {
+      if (budget.remaining <= 0) break
+      budget.remaining--
       const name = entry.name
       if (!name) continue
       const childRel = rel ? `${rel}/${name}` : name
       if (entry.type === 'directory') {
+        if (SKIP_DIRS.has(name)) continue
         const children = depth > 0
-          ? await this.walk(entry.target, childRel, depth - 1).catch(() => [])
+          ? await this.walk(entry.target, childRel, depth - 1, budget).catch(() => [])
           : []
         nodes.push({ type: 'dir', name, path: childRel, children })
       } else if (entry.type === 'file') {
@@ -126,7 +142,7 @@ export class FilePreviewService extends TypertRemoteService {
     try {
       const policy = this.policyFor(request.sessionId)
       const root = await this.ctx.fs.resolve(policy.workspaceRoot, {})
-      const tree = await this.walk(root, '', MAX_DEPTH)
+      const tree = await this.walk(root, '', MAX_DEPTH, { remaining: MAX_TREE_NODES })
       return { ok: true, value: tree }
     } catch (error) {
       return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }

@@ -12,6 +12,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FilePreviewRemote } from './remote.ts'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import {
   escapeHtml, highlight, indentUnit, isMdPath, langFor, leadingIndent, trimmedLine,
 } from './render.ts'
@@ -72,11 +74,14 @@ function resolveImagePath(baseDir: string, src: string): string {
 function MarkdownImage(props: {
   src: string | undefined
   alt: string | undefined
+  title: string | undefined
+  width: string | number | undefined
+  height: string | number | undefined
   remote: FilePreviewRemote
   sessionId: SessionId | undefined
   baseDir: string
 }): React.ReactElement {
-  const { src, alt, remote, sessionId, baseDir } = props
+  const { src, alt, title, width, height, remote, sessionId, baseDir } = props
   const [resolved, setResolved] = useState<string | undefined>(src)
   useEffect(() => {
     if (sessionId === undefined || src === undefined || isExternalImage(src)) return
@@ -87,7 +92,7 @@ function MarkdownImage(props: {
     })()
     return () => { cancelled = true }
   }, [src, baseDir, remote, sessionId])
-  return <img src={resolved} alt={alt} />
+  return <img src={resolved} alt={alt} title={title} width={width} height={height} />
 }
 
 /** Renders a fenced code block with syntax highlighting. */
@@ -359,7 +364,16 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     const baseDir = file.path.slice(0, file.path.lastIndexOf('/') + 1)
     const markdownComponents: Components = {
       img: (props) => (
-        <MarkdownImage src={props.src} alt={props.alt} remote={remote} sessionId={sessionId} baseDir={baseDir} />
+        <MarkdownImage
+          src={props.src}
+          alt={props.alt}
+          title={props.title}
+          width={props.width}
+          height={props.height}
+          remote={remote}
+          sessionId={sessionId}
+          baseDir={baseDir}
+        />
       ),
       code: (props) => (
         <MarkdownCode className={props.className} children={props.children} colors={theme.colors} />
@@ -369,7 +383,13 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       <div className={css.scroll}>
         <div className={css.meta}>{file.name}</div>
         <div className={css.out} style={{ fontSize: fontSizePx }}>
-          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{source}</Markdown>
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeRaw, rehypeSanitize]}
+            components={markdownComponents}
+          >
+            {source}
+          </Markdown>
         </div>
       </div>
     )
