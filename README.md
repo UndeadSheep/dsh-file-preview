@@ -69,6 +69,10 @@ pnpm build        # = build:host + build:client
 2. `tsdown --env.DSH_BUILD_FACE host`：打包宿主 `lib/index.js`，并跑 Typert 代码生成，产出 `typert.host.js` + `typert.remote-client.js`。
 3. `tsdown --env.DSH_BUILD_FACE client`：出浏览器 bundle `lib/client.js`（CSS Module 内联 + `__ModuleLoader__` 包装）。
 
+> 客户端 Markdown 渲染用 `react-markdown` + `remark-gfm` + `rehype-raw` + `rehype-sanitize`
+> （内联打包进 `lib/client.js`，所以 bundle 有 1MB+）；统一生态依赖的 node 内置模块由
+> `build/tsdown.client.ts` 里的 shim 转成浏览器实现。
+
 > **Typert 产物完全在本仓库内生成，无需 fork**。`dsh-typert-generator` 要求 `@deepseek-ai/dsh-typert-protocol`
 > 的源码在 workspace 里（从 npm 装的 `.d.ts` 它识别不到 `@Remote`），所以本仓库 vendor 了该协议的源码
 > 到 `packages/dsh-typert-protocol/`（仅用于类型检查与代码生成；运行时仍从 npm 解析官方包）。
@@ -85,6 +89,12 @@ pnpm dev
 
 启动后浏览器访问 `http://127.0.0.1:3090` 看效果（Ctrl+C 停止）。换端口用 `pnpm dev --port 3091`；只想构建+安装、不自动起服务用 `pnpm dev --no-start`（会打印带 `DSH_HOME` 的手动启动命令）。
 
+选好工作区、打开一个会话后，重点验证三点：
+
+- **按钮**：会话头部右上角出现「文件预览」，点击弹出悬浮窗（空欢迎页/无会话时本来就没有）。
+- **图片**：文件树里点开 `README.md`，三张插图应直接显示（本地相对路径会经 `readImage` 解析成 data URL）。
+- **速度**：首次点开时左侧文件树应秒出；`node_modules` / `.git` 等重目录不会出现在树里。
+
 > `pnpm dev` 会：构建 → 临时去掉宿主对客户端的依赖 → `pnpm pack` 两个 tarball → 恢复宿主依赖 →
 > 装进 `%TEMP%\dsh-dev-profile` → 用该 profile 起 `dsh web`。它不改动仓库的「发布形态」，只在你本地临时切换。
 >
@@ -93,26 +103,38 @@ pnpm dev
 
 ## 发布到 npm
 
-1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起 bump。
+1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起改成同一个版本号（例如 `0.1.0-rc.3`）。
 2. 构建：`pnpm build`。
-3. 发布（先客户端后宿主；prerelease 带 `--tag latest`）：
+3. 发布（**先客户端后宿主**，因为宿主依赖客户端）：
 
    ```powershell
-   Set-Location .\packages\dsh-client-ui-file-preview; npm publish --access public --tag latest
-   Set-Location .\packages\dsh-file-preview;        npm publish --access public --tag latest
+   Set-Location .\packages\dsh-client-ui-file-preview; pnpm publish --access public --tag latest
+   Set-Location .\packages\dsh-file-preview;        pnpm publish --access public --tag latest
    ```
+
+   > 用 `pnpm publish` 而不是 `npm publish`：宿主 `package.json` 里的客户端依赖写的是
+   > `workspace:^`，`pnpm publish` 会自动把它转成 `^<version>` 再上传（本地 `pnpm pack`
+   > 也是同样的转换）。发布后核对：
+   >
+   > ```powershell
+   > npm view @undeadsheep/dsh-file-preview dependencies
+   > ```
+   >
+   > 客户端依赖应是 `^<version>`，不能是 `workspace:^`。
+   >
+   > prerelease 也带 `--tag latest`（本插件尚未发过 stable，`latest` 即最新 rc）。
 
 ## 已知限制
 
 - **git 安装（`dsh plugin add github:...`）**：本仓库是多包工作区，git 安装需单包仓库 + 自包含 `prepare`
   构建脚本；当前推荐 npm / tarball 方式。
-- 预览只读文本、语法高亮为轻量 tokenizer、自动刷新为轮询（详见 `packages/dsh-file-preview/README.md`）。
+- 预览为纯文本（二进制/超限文件返回 `not-text` / `too-large`）、语法高亮为轻量 tokenizer、自动刷新为轮询（详见 `packages/dsh-file-preview/README.md`）。
 
 ## 作者与许可
 
 - 作者：UndeadSheep
 - 许可：[MIT](LICENSE) —— 可自由使用/修改/分发，但需保留本版权声明与署名。
-- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 内嵌 zod（MIT）+ vendor 的
-  `@deepseek-ai/dsh-typert-protocol` 源码（MIT）。
+- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 内嵌 zod、react-markdown、remark-gfm、
+  rehype-raw、rehype-sanitize（均 MIT）+ vendor 的 `@deepseek-ai/dsh-typert-protocol` 源码（MIT）。
 - 社区收录：本仓库添加 GitHub topic `dsh-plugin` 后，会被 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
   等社区列表与 topic 搜索收录。
