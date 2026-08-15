@@ -70,13 +70,12 @@ pnpm build        # = build:host + build:client
 构建流程（产物 `packages/*/lib/`）：
 
 1. `tsc -b` 编译各包 `src/` → `lib/types/`（类型声明 + 编译 JS）。
-2. `tsdown --env.DSH_BUILD_FACE host`：打包宿主 → `lib/index.js`。
+2. `tsdown --env.DSH_BUILD_FACE host`：打包宿主 `lib/index.js`，并跑 Typert 代码生成，产出 `typert.host.js` + `typert.remote-client.js`。
 3. `tsdown --env.DSH_BUILD_FACE client`：出浏览器 bundle `lib/client.js`（CSS Module 内联 + `__ModuleLoader__` 包装）。
 
-> **Typert 产物（`lib/typert.host.js` / `lib/typert.remote-client.js`）是预生成并提交的**，不在本构建里重新生成。
-> 因为 `dsh-typert-generator` 需要 `@deepseek-ai/dsh-typert-protocol` 的**源码**在 workspace 里（在 monorepo 里才满足），
-> 独立仓库从 node_modules 解析会识别不到 `@Remote`。只有**改动 Remote 方法签名**时，才需要回到 fork 的 monorepo
-> 重新 `pnpm build` 生成新的 typert 产物，再拷回 `packages/dsh-file-preview/lib/`。改 UI / 业务逻辑不影响 typert 产物。
+> **Typert 产物完全在本仓库内生成，无需 fork**。`dsh-typert-generator` 要求 `@deepseek-ai/dsh-typert-protocol`
+> 的源码在 workspace 里（从 npm 装的 `.d.ts` 它识别不到 `@Remote`），所以本仓库 vendor 了该协议的源码
+> 到 `packages/dsh-typert-protocol/`（仅用于类型检查与代码生成；运行时仍从 npm 解析官方包）。
 
 > 依赖的 `@deepseek-ai/*` 是官方已发布包，从 npm 解析（见根 `package.json` devDependencies）。
 
