@@ -195,6 +195,16 @@ function renderInline(s: string): string {
 export function renderMarkdown(src: string): string {
   let raw = src ?? ''
   raw = raw.split('\r\n').join('\n').split('\r').join('\n')
+  // Normalize raw HTML <img> tags into markdown image syntax so they render and
+  // local srcs can be resolved by the preview window. Unsafe/empty srcs are dropped.
+  raw = raw.replace(/<img\s+([^>]*?)\s*\/?>/gi, (_m, attrs: string) => {
+    const src = /src\s*=\s*["']([^"']*)["']/i.exec(attrs)?.[1] ?? ''
+    const alt = /alt\s*=\s*["']([^"']*)["']/i.exec(attrs)?.[1] ?? ''
+    if (src === '' || /^javascript:/i.test(src) || /^data:text\/html/i.test(src)) return ''
+    return `![${alt}](${src})`
+  })
+  // Strip common wrapping tags so they do not surface as escaped literal text.
+  raw = raw.replace(/<\/?(p|div|span|br)\b[^>]*>/gi, '')
   const safe = escapeHtml(raw)
   const lines = safe.split('\n')
   const html: string[] = []
