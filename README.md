@@ -2,7 +2,7 @@
 
 > 昵称 `file-peek` · 正式仓库/npm 名 `dsh-file-preview`
 
-![file-peek 吉祥物：粉发女仆抱着一摞书快摔倒](assets/pink-haired-maid-books-readme.png)
+![file-peek 吉祥物：粉发女仆抱着一摞书快摔倒](assets/github-social-preview.png)
 
 抱书女仆帮你偷瞄工作区 —— DeepSeek Harness 的「悬浮文件预览窗口」插件（宿主 Typert Remote 服务 + 浏览器客户端悬浮窗）。
 
@@ -46,7 +46,10 @@ dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 
 ## 界面截图
 
-![悬浮文件预览窗口截图](assets/sc.png) ![悬浮文件预览窗口截图](assets/sc1.png)
+<p>
+  <img src="assets/sc.png" width="49%" alt="悬浮文件预览：Markdown 渲染" />
+  <img src="assets/sc1.png" width="49%" alt="悬浮文件预览：代码编辑" />
+</p>
 
 ## 目录结构
 
