@@ -169,6 +169,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   }>({ colors: {}, bg: undefined, fg: undefined })
   const [config, setConfig] = useState<ConfigPayload>(DEFAULT_CONFIG)
   const editorPreRef = useRef<HTMLPreElement>(null)
+  const savedSourceRef = useRef('')
 
   useEffect(() => subscribeOpen(() => setOpenState(mdOpen)), [])
   useEffect(() => { if (open) reveal() }, [open])
@@ -225,6 +226,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       setFile({ path, name: res.value.path || path, isMarkdown })
       setSource(content)
       setDirty(false)
+      savedSourceRef.current = content
       setMode('preview')
     } else {
       setFile(null)
@@ -239,6 +241,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     const res = unwrap<{ path: string }>(await remote.writeFile({ sessionId, path: file.path, content: source }))
     if (res.ok) {
       setDirty(false)
+      savedSourceRef.current = source
     } else {
       setError(res.error)
     }
@@ -255,6 +258,12 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
 
   function switchToPreview(): void {
     setMode('preview')
+  }
+
+  /** Apply an editor change and mark dirty when it differs from the saved content. */
+  function applyEdit(next: string): void {
+    setSource(next)
+    setDirty(next !== savedSourceRef.current)
   }
 
   function handleKeyDown(e: React.KeyboardEvent): void {
@@ -308,12 +317,12 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
               editorPreRef.current.scrollLeft = e.currentTarget.scrollLeft
             }
           }}
-          onChange={(e) => { setSource(e.target.value); setDirty(true) }}
+          onChange={(e) => { applyEdit(e.currentTarget.value) }}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing || (e.nativeEvent as KeyboardEvent).keyCode === 229) return
+            const ta = e.currentTarget
             if (e.key === 'Enter') {
               e.preventDefault()
-              const ta = e.currentTarget
               const start = ta.selectionStart
               const end = ta.selectionEnd
               const before = source.slice(0, start)
@@ -322,37 +331,34 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
               let indent = leadingIndent(lineText)
               const lastCh = trimmedLine(lineText).slice(-1)
               if (lastCh === '{' || lastCh === '[' || lastCh === '(') indent += indentUnit(config)
-              setSource(before + '\n' + indent + source.slice(end))
-              setDirty(true)
+              const next = before + '\n' + indent + source.slice(end)
+              applyEdit(next)
               const cursor = start + 1 + indent.length
               requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
             } else if (e.key === 'Tab') {
               e.preventDefault()
-              const ta = e.currentTarget
               const start = ta.selectionStart
               const end = ta.selectionEnd
               const unit = indentUnit(config)
-              setSource(source.slice(0, start) + unit + source.slice(end))
-              setDirty(true)
+              const next = source.slice(0, start) + unit + source.slice(end)
+              applyEdit(next)
               const cursor = start + unit.length
               requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
             } else if (e.key === '"' || e.key === "'" || e.key === '`') {
               e.preventDefault()
-              const ta = e.currentTarget
               const start = ta.selectionStart
               const end = ta.selectionEnd
-              setSource(source.slice(0, start) + e.key + source.slice(start, end) + e.key + source.slice(end))
-              setDirty(true)
+              const next = source.slice(0, start) + e.key + source.slice(start, end) + e.key + source.slice(end)
+              applyEdit(next)
               const cursor = start === end ? start + 1 : end + 2
               requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
             } else if (e.key === '(' || e.key === '[' || e.key === '{') {
               e.preventDefault()
-              const ta = e.currentTarget
               const start = ta.selectionStart
               const end = ta.selectionEnd
               const close = e.key === '(' ? ')' : e.key === '[' ? ']' : '}'
-              setSource(source.slice(0, start) + e.key + source.slice(start, end) + close + source.slice(end))
-              setDirty(true)
+              const next = source.slice(0, start) + e.key + source.slice(start, end) + close + source.slice(end)
+              applyEdit(next)
               const cursor = start === end ? start + 1 : end + 2
               requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
             }
