@@ -23,11 +23,15 @@ convention; the generated `./remote` face wraps them in the `RemoteResult` carri
 Wire codecs are generated from the `@Remote` method types by typert codegen — there is
 no hand-written schema file.
 
+`listTree` skips heavy/noise directories (`node_modules`, `.git`, `.next`, …) and caps the
+returned tree at 5000 nodes, so large workspaces stay fast.
+
 ## Config
 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `maxFileBytes` | 2097152 | Maximum UTF-8 byte length the preview will read |
+| `maxImageBytes` | 5242880 | Maximum byte length of an inline image the preview will read |
 
 ## Workspace config files (read per Session, optional)
 
