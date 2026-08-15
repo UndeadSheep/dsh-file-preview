@@ -7,7 +7,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ConfigPayload, FileTreeNode, PreviewThemeColors, ThemePayload } from '@undeadsheep/dsh-file-preview/types'
+import type { ConfigPayload, FileTreeNode, ImagePayload, PreviewThemeColors, ThemePayload } from '@undeadsheep/dsh-file-preview/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FilePreviewRemote } from './remote.ts'
 import {
   escapeHtml, highlight, indentUnit, isMdPath, langFor, leadingIndent, renderMarkdown, trimmedLine,
@@ -46,6 +47,52 @@ function unwrap<X>(carried: RemoteResult<unknown>): { ok: true; value: X } | { o
   const result = carried.value as { ok?: boolean; value?: X; error?: { code?: string; message?: string } }
   if (!result.ok) return { ok: false, error: describeFailure(result.error ?? {}) }
   return { ok: true, value: result.value as X }
+}
+
+/** True when an image src is already absolute/protocol/data and needs no host read. */
+function isExternalImage(src: string): boolean {
+  return src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:') || src.startsWith('//')
+}
+
+/** Resolve a markdown image src against the markdown file's directory. */
+function resolveImagePath(baseDir: string, src: string): string {
+  if (src.startsWith('/')) return src.slice(1)
+  const parts: string[] = []
+  for (const seg of (baseDir + src).split('/')) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..') parts.pop()
+    else parts.push(seg)
+  }
+  return parts.join('/')
+}
+
+/** Replace local <img> srcs in rendered markdown with data URLs fetched from the host. */
+async function resolveLocalImages(
+  html: string,
+  baseDir: string,
+  remote: FilePreviewRemote,
+  sessionId: SessionId,
+): Promise<string> {
+  const imgRe = /<img src="([^"]+)" alt="([^"]*)" \/>/g
+  const swaps: Array<{ from: string; to: string | null }> = []
+  let match: RegExpExecArray | null
+  while ((match = imgRe.exec(html)) !== null) {
+    const src = match[1] ?? ''
+    if (isExternalImage(src)) continue
+    const resolved = resolveImagePath(baseDir, src)
+    const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path: resolved }))
+    if (res.ok) {
+      swaps.push({ from: `src="${src}"`, to: `src="data:${res.value.mimeType};base64,${res.value.data}"` })
+    } else {
+      swaps.push({ from: `src="${src}"`, to: null })
+    }
+  }
+  let out = html
+  for (const swap of swaps) {
+    if (swap.to === null) continue
+    out = out.split(swap.from).join(swap.to)
+  }
+  return out
 }
 
 const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13 }
@@ -163,7 +210,14 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       const isMarkdown = isMdPath(path)
       setFile({ path, name: res.value.path || path, isMarkdown })
       setSource(content)
-      setHtml(isMarkdown ? renderMarkdown(content) : '')
+      if (isMarkdown) {
+        const dir = path.slice(0, path.lastIndexOf('/') + 1)
+        const rendered = renderMarkdown(content)
+        setHtml(rendered)
+        void resolveLocalImages(rendered, dir, remote, sessionId).then(setHtml)
+      } else {
+        setHtml('')
+      }
       setDirty(false)
       setMode('preview')
     } else {

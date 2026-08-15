@@ -87,6 +87,35 @@ const _deepseek_ai_dsh_file_preview_filePreview_readFile_result$schema = z.union
   'size': z.number().readonly(),
 })]).readonly(),
 })])
+const _deepseek_ai_dsh_file_preview_filePreview_readImage_parameter_0$schema = z.object({
+  'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
+  'path': z.string().readonly(),
+})
+const _deepseek_ai_dsh_file_preview_filePreview_readImage_result$schema = z.union([z.object({
+  'ok': z.literal(false).readonly(),
+  'error': z.union([z.object({
+  'code': z.literal("io-failure").readonly(),
+  'message': z.string().readonly(),
+}), z.object({
+  'code': z.literal("not-found").readonly(),
+  'path': z.string().readonly(),
+}), z.object({
+  'code': z.literal("not-text").readonly(),
+  'path': z.string().readonly(),
+}), z.object({
+  'code': z.literal("too-large").readonly(),
+  'path': z.string().readonly(),
+  'maxBytes': z.number().readonly(),
+  'size': z.number().readonly(),
+})]).readonly(),
+}), z.object({
+  'ok': z.literal(true).readonly(),
+  'value': z.object({
+  'path': z.string(),
+  'mimeType': z.string(),
+  'data': z.string(),
+}).readonly(),
+})])
 const _deepseek_ai_dsh_file_preview_filePreview_readTheme_parameter_0$schema = z.object({
   'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
 })
@@ -160,7 +189,7 @@ export const TYPERT = {
         typeSymbol: '@undeadsheep/dsh-file-preview/types#ListTreeResult',
         schema: _deepseek_ai_dsh_file_preview_filePreview_listTree_result$schema,
       },
-      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":103,"column":9},
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":125,"column":9},
     },
     {
       id: '@undeadsheep/dsh-file-preview#filePreview/readConfig',
@@ -185,7 +214,7 @@ export const TYPERT = {
         typeSymbol: '@undeadsheep/dsh-file-preview/types#ReadConfigResult',
         schema: _deepseek_ai_dsh_file_preview_filePreview_readConfig_result$schema,
       },
-      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":185,"column":9},
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":227,"column":9},
     },
     {
       id: '@undeadsheep/dsh-file-preview#filePreview/readFile',
@@ -210,7 +239,32 @@ export const TYPERT = {
         typeSymbol: '@undeadsheep/dsh-file-preview/types#ReadFileResult',
         schema: _deepseek_ai_dsh_file_preview_filePreview_readFile_result$schema,
       },
-      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":115,"column":9},
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":137,"column":9},
+    },
+    {
+      id: '@undeadsheep/dsh-file-preview#filePreview/readImage',
+      service: 'filePreview',
+      namespace: 'filePreview',
+      method: 'readImage',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@undeadsheep/dsh-file-preview/types#ReadImageRequest',
+            schema: _deepseek_ai_dsh_file_preview_filePreview_readImage_parameter_0$schema,
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@undeadsheep/dsh-file-preview/types#ReadImageResult',
+        schema: _deepseek_ai_dsh_file_preview_filePreview_readImage_result$schema,
+      },
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":158,"column":9},
     },
     {
       id: '@undeadsheep/dsh-file-preview#filePreview/readTheme',
@@ -235,7 +289,7 @@ export const TYPERT = {
         typeSymbol: '@undeadsheep/dsh-file-preview/types#ReadThemeResult',
         schema: _deepseek_ai_dsh_file_preview_filePreview_readTheme_result$schema,
       },
-      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":148,"column":9},
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":190,"column":9},
     },
     {
       id: '@undeadsheep/dsh-file-preview#filePreview/writeFile',
@@ -260,7 +314,7 @@ export const TYPERT = {
         typeSymbol: '@undeadsheep/dsh-file-preview/types#WriteFileResult',
         schema: _deepseek_ai_dsh_file_preview_filePreview_writeFile_result$schema,
       },
-      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":136,"column":9},
+      sourceLocation: {"file":"packages/workspace/file-preview/src/index.ts","line":178,"column":9},
     },
   ],
   model: {
@@ -282,6 +336,11 @@ export const TYPERT = {
             "kind": "method",
             "name": "readFile",
             "signature": "@Remote('readFile') async readFile(request: ReadFileRequest): Promise<ReadFileResult>"
+          },
+          {
+            "kind": "method",
+            "name": "readImage",
+            "signature": "@Remote('readImage') async readImage(request: ReadImageRequest): Promise<ReadImageResult>"
           },
           {
             "kind": "method",
@@ -341,6 +400,10 @@ export const TYPERT = {
             "declaration": "export type FileTreeNode = { readonly type: 'dir'; readonly name: string; readonly path: string; readonly children: FileTreeNode[]; } | { readonly type: 'file'; readonly name: string; readonly path: string; readonly size?: number; } | { readonly type: 'other'; readonly name: string; readonly path: string; readonly size?: number; };"
           },
           {
+            "name": "ImagePayload",
+            "declaration": "export interface ImagePayload {\n    path: string;\n    mimeType: string;\n    data: string;\n}"
+          },
+          {
             "name": "ListTreeRequest",
             "declaration": "export interface ListTreeRequest {\n    readonly sessionId: SessionId;\n}"
           },
@@ -371,6 +434,14 @@ export const TYPERT = {
           {
             "name": "ReadFileResult",
             "declaration": "export type ReadFileResult = Ok<{ path: string; content: string; }> | Rejected<FilePreviewNotFound | FilePreviewNotText | FilePreviewTooLarge | FilePreviewIoFailure>;"
+          },
+          {
+            "name": "ReadImageRequest",
+            "declaration": "export interface ReadImageRequest {\n    readonly sessionId: SessionId;\n    readonly path: string;\n}"
+          },
+          {
+            "name": "ReadImageResult",
+            "declaration": "export type ReadImageResult = Ok<ImagePayload> | Rejected<FilePreviewNotFound | FilePreviewNotText | FilePreviewTooLarge | FilePreviewIoFailure>;"
           },
           {
             "name": "ReadThemeRequest",

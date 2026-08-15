@@ -82,6 +82,12 @@ export interface ReadFileRequest {
   readonly path: string
 }
 
+/** Request: read one image file as base64 for inline preview. */
+export interface ReadImageRequest {
+  readonly sessionId: SessionId
+  readonly path: string
+}
+
 /** Request: overwrite one text file. */
 export interface WriteFileRequest {
   readonly sessionId: SessionId
@@ -107,6 +113,19 @@ export type ListTreeResult =
 /** Read one UTF-8 text file. */
 export type ReadFileResult =
   | Ok<{ path: string; content: string }>
+  | Rejected<FilePreviewNotFound | FilePreviewNotText | FilePreviewTooLarge | FilePreviewIoFailure>
+
+/** Decoded image payload: base64 bytes plus MIME type for an inline <img>. */
+export interface ImagePayload {
+  path: string
+  mimeType: string
+  /** Base64-encoded bytes. */
+  data: string
+}
+
+/** Read one image file as base64. */
+export type ReadImageResult =
+  | Ok<ImagePayload>
   | Rejected<FilePreviewNotFound | FilePreviewNotText | FilePreviewTooLarge | FilePreviewIoFailure>
 
 /** Overwrite one text file. */

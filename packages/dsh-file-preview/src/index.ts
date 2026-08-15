@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {
   ConfigPayload,
   FileTreeNode,
+  ImagePayload,
   ListTreeRequest,
   ListTreeResult,
   PreviewThemeColors,
@@ -21,6 +22,8 @@ import type {
   ReadConfigResult,
   ReadFileRequest,
   ReadFileResult,
+  ReadImageRequest,
+  ReadImageResult,
   ReadThemeRequest,
   ReadThemeResult,
   ThemePayload,
@@ -34,6 +37,8 @@ export type * from './types.ts'
 export interface Config {
   /** Maximum UTF-8 byte length of a file the preview will read. */
   maxFileBytes?: number
+  /** Maximum byte length of an inline image the preview will read. */
+  maxImageBytes?: number
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -43,20 +48,37 @@ declare module '@deepseek-ai/cordis' {
 }
 
 const DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
+const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_DEPTH = 12
+
+/** Map an image path extension to a browser-safe MIME type. */
+function mimeFor(path: string): string {
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.svg')) return 'image/svg+xml'
+  if (lower.endsWith('.bmp')) return 'image/bmp'
+  if (lower.endsWith('.ico')) return 'image/x-icon'
+  return 'application/octet-stream'
+}
 
 /** Host-facing Remote for the floating file-preview window. */
 export class FilePreviewService extends TypertRemoteService {
   static inject = ['fs', 'sandboxPolicy', 'sessions']
   static Config: s<Config> = s.object({
     maxFileBytes: s.number().step(1).min(1),
+    maxImageBytes: s.number().step(1).min(1),
   })
 
   private readonly maxFileBytes: number
+  private readonly maxImageBytes: number
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'filePreview')
     this.maxFileBytes = config.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
+    this.maxImageBytes = config.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES
   }
 
   /** Resolve the per-call sandbox policy from a session id (fallback: deployment default). */
@@ -128,6 +150,26 @@ export class FilePreviewService extends TypertRemoteService {
       if (error !== null && typeof error === 'object' && (error as { code?: string }).code === 'FS_NOT_TEXT') {
         return { ok: false, error: { code: 'not-text', path: request.path } }
       }
+      return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
+    }
+  }
+
+  @Remote('readImage')
+  async readImage(request: ReadImageRequest): Promise<ReadImageResult> {
+    try {
+      const policy = this.policyFor(request.sessionId)
+      const target = await this.ctx.fs.resolve(request.path, { cwd: policy.workspaceRoot })
+      const info = await this.ctx.fs.stat(target)
+      if (!info) return { ok: false, error: { code: 'not-found', path: request.path } }
+      if (info.type !== 'file') return { ok: false, error: { code: 'not-text', path: request.path } }
+      if (info.size !== undefined && info.size > this.maxImageBytes) {
+        return { ok: false, error: { code: 'too-large', path: request.path, maxBytes: this.maxImageBytes, size: info.size } }
+      }
+      const bytes = await this.ctx.fs.readBytes(target, undefined, this.maxImageBytes)
+      const data = Buffer.from(bytes).toString('base64')
+      const value: ImagePayload = { path: request.path, mimeType: mimeFor(request.path), data }
+      return { ok: true, value }
+    } catch (error) {
       return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
     }
   }

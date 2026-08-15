@@ -14,6 +14,8 @@ import type {
   ReadConfigResult,
   ReadFileRequest,
   ReadFileResult,
+  ReadImageRequest,
+  ReadImageResult,
   ReadThemeRequest,
   ReadThemeResult,
   WriteFileRequest,
@@ -23,6 +25,7 @@ import type {
 export interface FilePreviewRemote {
   listTree(request: ListTreeRequest): Promise<RemoteResult<ListTreeResult>>
   readFile(request: ReadFileRequest): Promise<RemoteResult<ReadFileResult>>
+  readImage(request: ReadImageRequest): Promise<RemoteResult<ReadImageResult>>
   writeFile(request: WriteFileRequest): Promise<RemoteResult<WriteFileResult>>
   readTheme(request: ReadThemeRequest): Promise<RemoteResult<ReadThemeResult>>
   readConfig(request: ReadConfigRequest): Promise<RemoteResult<ReadConfigResult>>

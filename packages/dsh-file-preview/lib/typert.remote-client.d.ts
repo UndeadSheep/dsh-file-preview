@@ -3,13 +3,14 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { ListTreeRequest, ListTreeResult, ReadConfigRequest, ReadConfigResult, ReadFileRequest, ReadFileResult, ReadThemeRequest, ReadThemeResult, WriteFileRequest, WriteFileResult } from '@undeadsheep/dsh-file-preview/types'
+import type { ListTreeRequest, ListTreeResult, ReadConfigRequest, ReadConfigResult, ReadFileRequest, ReadFileResult, ReadImageRequest, ReadImageResult, ReadThemeRequest, ReadThemeResult, WriteFileRequest, WriteFileResult } from '@undeadsheep/dsh-file-preview/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$66696c6550726576696577 {
     listTree: (request: ListTreeRequest) => Promise<RemoteResult<ListTreeResult>>
     readConfig: (request: ReadConfigRequest) => Promise<RemoteResult<ReadConfigResult>>
     readFile: (request: ReadFileRequest) => Promise<RemoteResult<ReadFileResult>>
+    readImage: (request: ReadImageRequest) => Promise<RemoteResult<ReadImageResult>>
     readTheme: (request: ReadThemeRequest) => Promise<RemoteResult<ReadThemeResult>>
     writeFile: (request: WriteFileRequest) => Promise<RemoteResult<WriteFileResult>>
   }
@@ -17,6 +18,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'filePreview/listTree': (request: ListTreeRequest) => Promise<RemoteResult<ListTreeResult>>
     'filePreview/readConfig': (request: ReadConfigRequest) => Promise<RemoteResult<ReadConfigResult>>
     'filePreview/readFile': (request: ReadFileRequest) => Promise<RemoteResult<ReadFileResult>>
+    'filePreview/readImage': (request: ReadImageRequest) => Promise<RemoteResult<ReadImageResult>>
     'filePreview/readTheme': (request: ReadThemeRequest) => Promise<RemoteResult<ReadThemeResult>>
     'filePreview/writeFile': (request: WriteFileRequest) => Promise<RemoteResult<WriteFileResult>>
   }
