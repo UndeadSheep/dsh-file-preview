@@ -392,7 +392,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
         <pre ref={editorPreRef} className={css.editorBg} aria-hidden style={preStyle} dangerouslySetInnerHTML={{ __html: editorHtml }} />
         <textarea
           className={css.editor}
-          value={source}
+          defaultValue={source}
           spellCheck={false}
           autoFocus
           style={{ caretColor, fontSize: fontSizePx }}
@@ -409,43 +409,33 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
             if (e.key === 'Enter') {
               e.preventDefault()
               const start = ta.selectionStart
-              const end = ta.selectionEnd
-              const before = source.slice(0, start)
+              const before = ta.value.slice(0, start)
               const lineStart = before.lastIndexOf('\n') + 1
               const lineText = before.slice(lineStart)
               let indent = leadingIndent(lineText)
               const lastCh = trimmedLine(lineText).slice(-1)
               if (lastCh === '{' || lastCh === '[' || lastCh === '(') indent += indentUnit(config)
-              const next = before + '\n' + indent + source.slice(end)
-              applyEdit(next)
-              const cursor = start + 1 + indent.length
-              requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
+              // execCommand('insertText') goes through the browser's input path, so it
+              // keeps the native undo/redo stack intact (unlike setting ta.value directly).
+              document.execCommand('insertText', false, '\n' + indent)
             } else if (e.key === 'Tab') {
               e.preventDefault()
-              const start = ta.selectionStart
-              const end = ta.selectionEnd
-              const unit = indentUnit(config)
-              const next = source.slice(0, start) + unit + source.slice(end)
-              applyEdit(next)
-              const cursor = start + unit.length
-              requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
+              document.execCommand('insertText', false, indentUnit(config))
             } else if (e.key === '"' || e.key === "'" || e.key === '`') {
               e.preventDefault()
               const start = ta.selectionStart
               const end = ta.selectionEnd
-              const next = source.slice(0, start) + e.key + source.slice(start, end) + e.key + source.slice(end)
-              applyEdit(next)
-              const cursor = start === end ? start + 1 : end + 2
-              requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
+              const selected = ta.value.slice(start, end)
+              document.execCommand('insertText', false, e.key + selected + e.key)
+              ta.setSelectionRange(start + 1, start + 1 + selected.length)
             } else if (e.key === '(' || e.key === '[' || e.key === '{') {
               e.preventDefault()
               const start = ta.selectionStart
               const end = ta.selectionEnd
+              const selected = ta.value.slice(start, end)
               const close = e.key === '(' ? ')' : e.key === '[' ? ']' : '}'
-              const next = source.slice(0, start) + e.key + source.slice(start, end) + close + source.slice(end)
-              applyEdit(next)
-              const cursor = start === end ? start + 1 : end + 2
-              requestAnimationFrame(() => ta.setSelectionRange(cursor, cursor))
+              document.execCommand('insertText', false, e.key + selected + close)
+              ta.setSelectionRange(start + 1, start + 1 + selected.length)
             }
           }}
         />
