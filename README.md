@@ -22,9 +22,9 @@ dsh plugin --profile web add @undeadsheep/dsh-file-preview
 ## 界面截图
 
 <p align="center">
-  <img src="assets/sc.png" alt="界面截图：文件预览" />
+  <img src="assets/sc.png" alt="悬浮文件预览窗口截图" />
   &nbsp;&nbsp;
-  <img src="assets/sc1.png" alt="界面截图：文件预览" />
+  <img src="assets/sc1.png" alt="悬浮文件预览窗口截图" />
 </p>
 
 ## 目录结构
