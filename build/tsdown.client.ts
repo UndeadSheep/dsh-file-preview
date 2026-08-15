@@ -127,6 +127,44 @@ function clientConfig(id: string, entry: string): UserConfig {
     },
     noExternal: (id: string) => (CLIENT_EXTERNALS.includes(id) ? undefined : true),
     plugins: [{
+      // react-markdown pulls in unified/vfile which import node builtins; the
+      // frozen module table cannot answer those, so map them to browser shims.
+      name: 'dsh-node-builtin-shim',
+      resolveId(source: string) {
+        if (source === 'node:process' || source === 'process') return '\0node-process'
+        if (source === 'node:path' || source === 'path') return '\0node-path'
+        if (source === 'node:url' || source === 'url') return '\0node-url'
+        return null
+      },
+      load(id: string) {
+        if (id === '\0node-process') {
+          return 'const cwd = () => "/"; export default { cwd, env: {} }; export { cwd };'
+        }
+        if (id === '\0node-path') {
+          return [
+            'const sep = "/";',
+            'const join = (...p) => p.filter(Boolean).join("/").replace(/\\/+/g, "/");',
+            'const resolve = (...p) => join(...p);',
+            'const dirname = (p) => { const i = p.lastIndexOf("/"); return i < 0 ? "." : (p.slice(0, i) || "/"); };',
+            'const basename = (p, ext) => { let b = p.split("/").pop() ?? ""; if (ext && b.endsWith(ext)) b = b.slice(0, -ext.length); return b; };',
+            'const extname = (p) => { const b = p.split("/").pop() ?? ""; const i = b.lastIndexOf("."); return i > 0 ? b.slice(i) : ""; };',
+            'const relative = (from, to) => to.replace(from, "").replace(/^\\/+/, "");',
+            'const posix = { sep, join, resolve, dirname, basename, extname, relative };',
+            'export default posix;',
+            'export { sep, join, resolve, dirname, basename, extname, relative, posix };',
+          ].join('\n')
+        }
+        if (id === '\0node-url') {
+          return [
+            'const fileURLToPath = (u) => decodeURIComponent(String(u).replace(/^file:\\/\\//, ""));',
+            'const pathToFileURL = (p) => ({ href: "file://" + p });',
+            'export default { fileURLToPath, pathToFileURL };',
+            'export { fileURLToPath, pathToFileURL };',
+          ].join('\n')
+        }
+        return null
+      },
+    }, {
       name: 'dsh-client-bundle-purity',
       resolveId(source: string) {
         if (!source.startsWith('@deepseek-ai/')) return null
