@@ -205,6 +205,16 @@ export function renderMarkdown(src: string): string {
   })
   // Strip common wrapping tags so they do not surface as escaped literal text.
   raw = raw.replace(/<\/?(p|div|span|br)\b[^>]*>/gi, '')
+  // Decode common HTML entities so e.g. &nbsp; renders as a real space instead
+  // of literal text (escapeHtml afterwards re-escapes the dangerous chars).
+  raw = raw
+    .split('&nbsp;').join('\u00a0')
+    .split('&amp;').join('&')
+    .split('&lt;').join('<')
+    .split('&gt;').join('>')
+    .split('&quot;').join('"')
+    .split('&#39;').join("'")
+    .split('&apos;').join("'")
   const safe = escapeHtml(raw)
   const lines = safe.split('\n')
   const html: string[] = []
