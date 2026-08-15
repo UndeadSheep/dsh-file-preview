@@ -266,7 +266,7 @@ export function renderMarkdown(src: string): string {
         const b = /^\s*[-*+]\s+(.*)$/.exec(lines[i] ?? '')
         const num = /^\s*(\d+)[.)]\s+(.*)$/.exec(lines[i] ?? '')
         if (b) { items.push(b[1] ?? ''); i++; continue }
-        if (num) { items.push(num[1] ?? ''); i++; continue }
+        if (num) { items.push(num[2] ?? ''); i++; continue }
         break
       }
       const tag = ordered ? 'ol' : 'ul'
