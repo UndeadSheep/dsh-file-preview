@@ -1,5 +1,9 @@
 # dsh-file-preview
 
+<p align="center">
+  <img src="assets/pink-haired-maid-books-readme.png" alt="dsh-file-preview 吉祥物：粉发女仆抱着一摞书快摔倒" width="480" />
+</p>
+
 DeepSeek Harness 的「悬浮文件预览窗口」插件，宿主 Typert Remote 服务 + 浏览器客户端悬浮窗。
 
 已发布到 npm（作用域 `@undeadsheep`）：
