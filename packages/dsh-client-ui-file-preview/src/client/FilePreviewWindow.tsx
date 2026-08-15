@@ -10,8 +10,10 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConfigPayload, FileTreeNode, ImagePayload, PreviewThemeColors, ThemePayload } from '@undeadsheep/dsh-file-preview/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FilePreviewRemote } from './remote.ts'
+import Markdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
-  escapeHtml, highlight, indentUnit, isMdPath, langFor, leadingIndent, renderMarkdown, trimmedLine,
+  escapeHtml, highlight, indentUnit, isMdPath, langFor, leadingIndent, trimmedLine,
 } from './render.ts'
 import css from './FilePreviewWindow.module.css'
 
@@ -66,33 +68,41 @@ function resolveImagePath(baseDir: string, src: string): string {
   return parts.join('/')
 }
 
-/** Replace local <img> srcs in rendered markdown with data URLs fetched from the host. */
-async function resolveLocalImages(
-  html: string,
-  baseDir: string,
-  remote: FilePreviewRemote,
-  sessionId: SessionId,
-): Promise<string> {
-  const imgRe = /<img src="([^"]+)" alt="([^"]*)" \/>/g
-  const swaps: Array<{ from: string; to: string | null }> = []
-  let match: RegExpExecArray | null
-  while ((match = imgRe.exec(html)) !== null) {
-    const src = match[1] ?? ''
-    if (isExternalImage(src)) continue
-    const resolved = resolveImagePath(baseDir, src)
-    const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path: resolved }))
-    if (res.ok) {
-      swaps.push({ from: `src="${src}"`, to: `src="data:${res.value.mimeType};base64,${res.value.data}"` })
-    } else {
-      swaps.push({ from: `src="${src}"`, to: null })
-    }
+/** Renders one markdown image, resolving local/relative srcs to data URLs via readImage. */
+function MarkdownImage(props: {
+  src: string | undefined
+  alt: string | undefined
+  remote: FilePreviewRemote
+  sessionId: SessionId | undefined
+  baseDir: string
+}): React.ReactElement {
+  const { src, alt, remote, sessionId, baseDir } = props
+  const [resolved, setResolved] = useState<string | undefined>(src)
+  useEffect(() => {
+    if (sessionId === undefined || src === undefined || isExternalImage(src)) return
+    let cancelled = false
+    void (async () => {
+      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path: resolveImagePath(baseDir, src) }))
+      if (!cancelled && res.ok) setResolved(`data:${res.value.mimeType};base64,${res.value.data}`)
+    })()
+    return () => { cancelled = true }
+  }, [src, baseDir, remote, sessionId])
+  return <img src={resolved} alt={alt} />
+}
+
+/** Renders a fenced code block with syntax highlighting. */
+function MarkdownCode(props: {
+  className: string | undefined
+  children: React.ReactNode
+  colors: PreviewThemeColors
+}): React.ReactElement {
+  const { className, children, colors } = props
+  const lang = /language-([\w-]+)/.exec(className ?? '')?.[1]
+  const text = String(children ?? '').replace(/\n$/, '')
+  if (lang !== undefined) {
+    return <code className={className} dangerouslySetInnerHTML={{ __html: highlight(text, lang, colors) }} />
   }
-  let out = html
-  for (const swap of swaps) {
-    if (swap.to === null) continue
-    out = out.split(swap.from).join(swap.to)
-  }
-  return out
+  return <code className={className}>{children}</code>
 }
 
 const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13 }
@@ -142,7 +152,6 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   const [pathInput, setPathInput] = useState('')
   const [file, setFile] = useState<null | { path: string; name: string; isMarkdown: boolean }>(null)
   const [source, setSource] = useState('')
-  const [html, setHtml] = useState('')
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -210,14 +219,6 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       const isMarkdown = isMdPath(path)
       setFile({ path, name: res.value.path || path, isMarkdown })
       setSource(content)
-      if (isMarkdown) {
-        const dir = path.slice(0, path.lastIndexOf('/') + 1)
-        const rendered = renderMarkdown(content)
-        setHtml(rendered)
-        void resolveLocalImages(rendered, dir, remote, sessionId).then(setHtml)
-      } else {
-        setHtml('')
-      }
       setDirty(false)
       setMode('preview')
     } else {
@@ -233,7 +234,6 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     const res = unwrap<{ path: string }>(await remote.writeFile({ sessionId, path: file.path, content: source }))
     if (res.ok) {
       setDirty(false)
-      if (file.isMarkdown) setHtml(renderMarkdown(source))
     } else {
       setError(res.error)
     }
@@ -249,7 +249,6 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   }
 
   function switchToPreview(): void {
-    if (file?.isMarkdown) setHtml(renderMarkdown(source))
     setMode('preview')
   }
 
@@ -357,10 +356,21 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       </div>
     )
   } else if (file.isMarkdown) {
+    const baseDir = file.path.slice(0, file.path.lastIndexOf('/') + 1)
+    const markdownComponents: Components = {
+      img: (props) => (
+        <MarkdownImage src={props.src} alt={props.alt} remote={remote} sessionId={sessionId} baseDir={baseDir} />
+      ),
+      code: (props) => (
+        <MarkdownCode className={props.className} children={props.children} colors={theme.colors} />
+      ),
+    }
     body = (
       <div className={css.scroll}>
         <div className={css.meta}>{file.name}</div>
-        <div className={css.out} style={{ fontSize: fontSizePx }} dangerouslySetInnerHTML={{ __html: html }} />
+        <div className={css.out} style={{ fontSize: fontSizePx }}>
+          <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{source}</Markdown>
+        </div>
       </div>
     )
   } else {
