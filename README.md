@@ -43,58 +43,65 @@ dsh web
 ## 目录结构
 
 ```
-├── src/
-│   ├── host/          # 宿主 Remote 服务源码（从 fork 同步的快照）
-│   └── client/        # 客户端 UI 源码（从 fork 同步的快照）
-├── bundle/
-│   ├── dsh-file-preview/              # 组合包（dsh.bundle + 宿主服务 + Typert 产物）
-│   └── dsh-client-ui-file-preview/    # 客户端包（dsh.client + 浏览器 bundle）
-├── scripts/
-│   ├── assemble-bundle.ps1            # 从 fork 构建产物组装 + 改名 @undeadsheep/*
-│   └── legacy/                        # 早期开发用的同步/修复脚本，仅存档
-├── docs/
-│   └── file-preview-INTEGRATION.md    # 集成到 monorepo 的说明
-└── test-fixtures/                     # 悬浮窗测试样例文件
+├── packages/
+│   ├── dsh-file-preview/              # 宿主：Typert Remote 服务 + 组合包清单
+│   │   ├── src/                       #   宿主源码
+│   │   ├── cordis.patch.yml           #   dsh.bundle 层（插入 file-preview + ui-file-preview 两行）
+│   │   └── package.json / tsconfig.json
+│   └── dsh-client-ui-file-preview/    # 客户端：浏览器悬浮窗 UI
+│       ├── src/                       #   客户端源码（含 CSS Module）
+│       └── package.json / tsconfig.json / tsdown.config.ts
+├── build/                             # vendor 的构建辅助（clientBundle 预设 + platform 清单）
+├── tsconfig.{base,base.client,host,client}.json
+├── tsdown.config.ts                   # 根构建（workspace 模式，跑 Typert 代码生成）
+├── assets/  docs/  test-fixtures/
+└── LICENSE / THIRD_PARTY_NOTICES.md
 ```
 
-## 源码与构建的关系
+## 开发（本仓库即源码，可独立构建）
 
-- **`src/` 是源码快照**（只读参考），不是可独立构建的工程——它的 `tsconfig.json` 引用了 monorepo 的
-  vendored 包，实际编译在 fork 里进行。
-- **真正的源码与构建在 fork**：`UndeadSheep/deepseek-harness` 的 `feat/file-preview` 分支
-  （`packages/workspace/file-preview` + `packages/client/ui-file-preview`）。
-- 本仓库负责**分发打包与发布**：`scripts/assemble-bundle.ps1` 读取 fork 构建出的 `lib/`，组装成
-  `bundle/` 里的两个可发布包，并把烘焙的包名从 `@deepseek-ai/*` 改成 `@undeadsheep/*`。
+本仓库是**自包含的插件源码仓库**，不再依赖 fork。装依赖并构建：
 
-## 改代码 → 重打包 → 发布流程
+```powershell
+pnpm install
+pnpm build        # = build:host + build:client
+```
 
-1. 在 fork 里改源码并重新构建：
+构建流程（产物 `packages/*/lib/`）：
+
+1. `tsc -b` 编译各包 `src/` → `lib/types/`（类型声明 + 编译 JS）。
+2. `tsdown --env.DSH_BUILD_FACE host`：跑 Typert 代码生成，产出 `typert.host.js` + `typert.remote-client.js`。
+3. `tsdown --env.DSH_BUILD_FACE client`：出浏览器 bundle `lib/client.js`（CSS Module 内联 + `__ModuleLoader__` 包装）。
+
+> 依赖的 `@deepseek-ai/*` 是官方已发布包，从 npm 解析（见根 `package.json` devDependencies）。
+
+## 本地验证
+
+```powershell
+pnpm build
+# 分别 pack 出两个 tarball，再装（顺序：先客户端后宿主）
+cd packages\dsh-client-ui-file-preview; pnpm pack; cd ..\..
+cd packages\dsh-file-preview;        pnpm pack; cd ..\..
+dsh plugin --profile demo add .\packages\dsh-client-ui-file-preview\undeadsheep-dsh-client-ui-file-preview-0.1.0-rc.1.tgz .\packages\dsh-file-preview\undeadsheep-dsh-file-preview-0.1.0-rc.1.tgz
+dsh web --port 3090
+```
+
+## 发布到 npm
+
+1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起 bump。
+2. 构建：`pnpm build`。
+3. 发布（先客户端后宿主；prerelease 带 `--tag latest`）：
 
    ```powershell
-   pnpm --filter @deepseek-ai/dsh-file-preview build
-   pnpm --filter @deepseek-ai/dsh-client-ui-file-preview build
-   ```
-
-2. 重新组装（若 fork 不在默认路径，先 `$env:DSH_FORK = '<fork 路径>'`）：
-
-   ```powershell
-   & .\scripts\assemble-bundle.ps1
-   ```
-
-3. bump 版本号（npm 同一版本不能重复发）：两个 `bundle/*/package.json` 的 `version` 一起 bump，
-   并把 `bundle/dsh-file-preview/package.json` 里对客户端的 `^0.1.0-rc.0` 依赖同步 bump。
-
-4. 发布（先客户端后 bundle，prerelease 必须带 `--tag latest`）：
-
-   ```powershell
-   Set-Location .\bundle\dsh-client-ui-file-preview; npm publish --access public --tag latest
-   Set-Location .\bundle\dsh-file-preview;        npm publish --access public --tag latest
+   Set-Location .\packages\dsh-client-ui-file-preview; npm publish --access public --tag latest
+   Set-Location .\packages\dsh-file-preview;        npm publish --access public --tag latest
    ```
 
 ## 已知限制
 
-- **git 安装（`dsh plugin add github:...`）未实现**：当前只分发预构建产物（npm / tarball）。
-  git 安装需要单包仓库 + 自包含 `prepare` 构建脚本。
+- **git 安装（`dsh plugin add github:...`）**：本仓库是多包工作区，git 安装需单包仓库 + 自包含 `prepare`
+  构建脚本；当前推荐 npm / tarball 方式。
+- 预览只读文本、语法高亮为轻量 tokenizer、自动刷新为轮询（详见 `packages/dsh-file-preview/README.md`）。
 
 ## 作者与许可
 
