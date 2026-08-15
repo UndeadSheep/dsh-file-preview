@@ -36,6 +36,14 @@ dsh web
 
 打开页面后，点会话头部右上角的「文件预览」按钮，即可打开悬浮预览窗口。
 
+## 卸载
+
+```powershell
+dsh plugin --profile web remove @undeadsheep/dsh-file-preview
+```
+
+移除后重启 `dsh web` 生效。
+
 ## 界面截图
 
 ![悬浮文件预览窗口截图](assets/sc.png) ![悬浮文件预览窗口截图](assets/sc1.png)
