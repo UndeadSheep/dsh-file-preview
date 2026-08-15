@@ -3,7 +3,7 @@
  * @module @undeadsheep/dsh-client-ui-file-preview/client/FilePreviewWindow
  */
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -82,13 +82,24 @@ function MarkdownImage(props: {
   baseDir: string
 }): React.ReactElement {
   const { src, alt, title, width, height, remote, sessionId, baseDir } = props
-  const [resolved, setResolved] = useState<string | undefined>(src)
+  const [resolved, setResolved] = useState<string | undefined>(() => {
+    if (sessionId === undefined || src === undefined || isExternalImage(src)) return src
+    const key = `${String(sessionId)}::${resolveImagePath(baseDir, src)}`
+    return imageCache.get(key) ?? src
+  })
   useEffect(() => {
     if (sessionId === undefined || src === undefined || isExternalImage(src)) return
+    const path = resolveImagePath(baseDir, src)
+    const key = `${String(sessionId)}::${path}`
+    if (imageCache.has(key)) return
     let cancelled = false
     void (async () => {
-      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path: resolveImagePath(baseDir, src) }))
-      if (!cancelled && res.ok) setResolved(`data:${res.value.mimeType};base64,${res.value.data}`)
+      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path }))
+      if (!cancelled && res.ok) {
+        const url = `data:${res.value.mimeType};base64,${res.value.data}`
+        imageCache.set(key, url)
+        setResolved(url)
+      }
     })()
     return () => { cancelled = true }
   }, [src, baseDir, remote, sessionId])
@@ -111,6 +122,13 @@ function MarkdownCode(props: {
 }
 
 const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13 }
+
+/** Stable plugin arrays so `<Markdown>` doesn't re-parse on every window render. */
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm]
+const MARKDOWN_REHYPE_PLUGINS = [rehypeRaw, rehypeSanitize]
+
+/** Resolved-image cache (session + resolved path → data URL) so remounts don't re-fetch or flicker. */
+const imageCache = new Map<string, string>()
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi)
@@ -170,6 +188,28 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   const [config, setConfig] = useState<ConfigPayload>(DEFAULT_CONFIG)
   const editorPreRef = useRef<HTMLPreElement>(null)
   const savedSourceRef = useRef('')
+
+  // Memoized markdown components: keep the `img`/`code` component identities stable across
+  // re-renders (the file tree polls every 1.5s), so images aren't unmounted/remounted — which
+  // would reset their resolved data URL and cause the flicker/reload.
+  const baseDir = file !== null ? file.path.slice(0, file.path.lastIndexOf('/') + 1) : ''
+  const markdownComponents = useMemo<Components>(() => ({
+    img: (props) => (
+      <MarkdownImage
+        src={props.src}
+        alt={props.alt}
+        title={props.title}
+        width={props.width}
+        height={props.height}
+        remote={remote}
+        sessionId={sessionId}
+        baseDir={baseDir}
+      />
+    ),
+    code: (props) => (
+      <MarkdownCode className={props.className} children={props.children} colors={theme.colors} />
+    ),
+  }), [remote, sessionId, baseDir, theme.colors])
 
   useEffect(() => subscribeOpen(() => setOpenState(mdOpen)), [])
   useEffect(() => { if (open) reveal() }, [open])
@@ -367,31 +407,13 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       </div>
     )
   } else if (file.isMarkdown) {
-    const baseDir = file.path.slice(0, file.path.lastIndexOf('/') + 1)
-    const markdownComponents: Components = {
-      img: (props) => (
-        <MarkdownImage
-          src={props.src}
-          alt={props.alt}
-          title={props.title}
-          width={props.width}
-          height={props.height}
-          remote={remote}
-          sessionId={sessionId}
-          baseDir={baseDir}
-        />
-      ),
-      code: (props) => (
-        <MarkdownCode className={props.className} children={props.children} colors={theme.colors} />
-      ),
-    }
     body = (
       <div className={css.scroll}>
         <div className={css.meta}>{file.name}</div>
         <div className={css.out} style={{ fontSize: fontSizePx }}>
           <Markdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeRaw, rehypeSanitize]}
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
             components={markdownComponents}
           >
             {source}
