@@ -36,9 +36,6 @@ dsh web
 
 打开页面后，点会话头部右上角的「文件预览」按钮，即可打开悬浮预览窗口。
 
-> 说明：上面的命令会把组合包 `@undeadsheep/dsh-file-preview` 和它的客户端
-> `@undeadsheep/dsh-client-ui-file-preview` 一起安装，用户无需手动装客户端。
-
 ## 界面截图
 
 ![悬浮文件预览窗口截图](assets/sc.png) ![悬浮文件预览窗口截图](assets/sc1.png)
@@ -65,7 +62,7 @@ dsh web
 
 ## 开发（本仓库即源码，可独立构建）
 
-本仓库是**自包含的插件源码仓库**，不再依赖 fork。装依赖并构建：
+本仓库是**自包含的插件源码仓库**。装依赖并构建：
 
 ```powershell
 pnpm install
@@ -82,7 +79,7 @@ pnpm build        # = build:host + build:client
 > （内联打包进 `lib/client.js`，所以 bundle 有 1MB+）；统一生态依赖的 node 内置模块由
 > `build/tsdown.client.ts` 里的 shim 转成浏览器实现。
 
-> **Typert 产物完全在本仓库内生成，无需 fork**。`dsh-typert-generator` 要求 `@deepseek-ai/dsh-typert-protocol`
+> **Typert 产物在本仓库内生成**。`dsh-typert-generator` 要求 `@deepseek-ai/dsh-typert-protocol`
 > 的源码在 workspace 里（从 npm 装的 `.d.ts` 它识别不到 `@Remote`），所以本仓库 vendor 了该协议的源码
 > 到 `packages/dsh-typert-protocol/`（仅用于类型检查与代码生成；运行时仍从 npm 解析官方包）。
 
@@ -104,8 +101,7 @@ pnpm dev
 - **图片**：文件树里点开 `README.md`，三张插图应直接显示（本地相对路径会经 `readImage` 解析成 data URL）。
 - **速度**：首次点开时左侧文件树应秒出；`node_modules` / `.git` 等重目录不会出现在树里。
 
-> `pnpm dev` 会：构建 → 临时去掉宿主对客户端的依赖 → `pnpm pack` 两个 tarball → 恢复宿主依赖 →
-> 装进 `%TEMP%\dsh-dev-profile` → 用该 profile 起 `dsh web`。它不改动仓库的「发布形态」，只在你本地临时切换。
+> 装好的 profile 在 `%TEMP%\dsh-dev-profile`；整个过程不改动仓库的「发布形态」，只在你本地临时切换。
 >
 > ⚠️ 手动起服务时必须带上同一个 `DSH_HOME`（见 `--no-start` 打印的命令），否则 `dsh web` 读的是 `~/.dsh`
 > ——那里没有本插件，就会「看不到文件预览按钮」。
@@ -142,8 +138,5 @@ pnpm dev
 ## 作者与许可
 
 - 作者：UndeadSheep
-- 许可：[MIT](LICENSE) —— 可自由使用/修改/分发，但需保留本版权声明与署名。
-- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) —— 内嵌 zod、react-markdown、remark-gfm、
-  rehype-raw、rehype-sanitize（均 MIT）+ vendor 的 `@deepseek-ai/dsh-typert-protocol` 源码（MIT）。
-- 社区收录：本仓库添加 GitHub topic `dsh-plugin` 后，会被 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
-  等社区列表与 topic 搜索收录。
+- 许可：[MIT](LICENSE)。
+- 第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
