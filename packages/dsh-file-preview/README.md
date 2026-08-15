@@ -5,7 +5,7 @@ workspace tree, reads/writes text files, and resolves the preview theme and conf
 the browser half.
 
 The browser UI lives in a separate package:
-[`@undeadsheep/dsh-client-ui-file-preview`](../../client/ui-file-preview).
+[`@undeadsheep/dsh-client-ui-file-preview`](../dsh-client-ui-file-preview).
 
 ## Remote surface
 
@@ -13,6 +13,7 @@ The browser UI lives in a separate package:
 |--------|---------|--------|
 | `listTree` | `{ sessionId }` | `Ok<FileTreeNode[]> \| Rejected` |
 | `readFile` | `{ sessionId, path }` | `Ok<{ path, content }> \| Rejected` |
+| `readImage` | `{ sessionId, path }` | `Ok<{ path, mimeType, data }> \| Rejected` |
 | `writeFile` | `{ sessionId, path, content }` | `Ok<{ path }> \| Rejected` |
 | `readTheme` | `{ sessionId }` | `Ok<{ colors, bg, fg }>` |
 | `readConfig` | `{ sessionId }` | `Ok<{ indentSize, useTabs, pollInterval, fontSize }>` |
