@@ -1,0 +1,14 @@
+{
+  "name": "@deepseek-ai/dsh-typert-protocol",
+  "version": "0.1.0-rc.6",
+  "private": true,
+  "description": "Vendored source mirror of the Typert protocol (typecheck/generator reference only; runtime resolves the published package)",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-invariants": "^0.1.0-rc.6"
+  }
+}

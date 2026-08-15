@@ -7,5 +7,10 @@
   "files": [
     "src/index.ts",
     "src/types.ts"
+  ],
+  "references": [
+    {
+      "path": "../dsh-typert-protocol"
+    }
   ]
 }

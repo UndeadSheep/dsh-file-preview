@@ -20,6 +20,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@deepseek-ai/dsh-typert-protocol": ["./packages/dsh-typert-protocol/src/index.ts"]
+    }
   }
 }

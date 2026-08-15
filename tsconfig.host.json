@@ -6,6 +6,7 @@
   },
   "include": [],
   "references": [
+    { "path": "./packages/dsh-typert-protocol" },
     { "path": "./packages/dsh-file-preview" }
   ]
 }
