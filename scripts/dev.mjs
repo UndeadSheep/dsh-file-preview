@@ -21,7 +21,6 @@ const run = (cmd, args, opts = {}) =>
 const readPkg = dir => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
 const tgzPath = (dir, pkg) =>
   join(dir, `${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`)
-
 // 1. 构建
 run('pnpm', ['build'])
 
