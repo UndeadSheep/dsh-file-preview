@@ -51,6 +51,16 @@ dsh web
 
 打开页面后，点会话头部右上角的「文件预览」按钮，即可打开悬浮预览窗口。
 
+## 更新
+
+升级到最新版：重新执行安装命令即可（`latest` 标签始终指向最新发布版本）。
+
+```powershell
+dsh plugin --profile web add @undeadsheep/dsh-file-preview
+```
+
+更新后重启 `dsh web` 生效。
+
 ## 卸载
 
 ```powershell
