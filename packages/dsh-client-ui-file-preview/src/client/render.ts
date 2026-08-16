@@ -70,6 +70,11 @@ export function isMdPath(path: string): boolean {
   return lower.endsWith('.md') || lower.endsWith('.markdown')
 }
 
+export function isImagePath(path: string): boolean {
+  const lower = path.toLowerCase()
+  return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(lower)
+}
+
 type TokenKind = 'keyword' | 'string' | 'number' | 'comment' | 'tag' | 'function' | 'type' | 'variable'
 
 export function highlight(code: string, lang: string | null, colors: PreviewThemeColors = {}): string {

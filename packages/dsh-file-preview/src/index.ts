@@ -7,6 +7,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+// Type-only: pulls the `ctx.fs` Context augmentation.
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the `ctx.sandboxPolicy` Context augmentation.
@@ -15,9 +16,11 @@ import type {
   ConfigPayload,
   FileTreeNode,
   ImagePayload,
-  ListTreeRequest,
-  ListTreeResult,
+  ListDirRequest,
+  ListDirResult,
   PreviewThemeColors,
+  SearchFilesRequest,
+  SearchFilesResult,
   ReadConfigRequest,
   ReadConfigResult,
   ReadFileRequest,
@@ -49,13 +52,12 @@ declare module '@deepseek-ai/cordis' {
 
 const DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_DEPTH = 12
-/** Stop descending once the tree has this many nodes, to bound worst-case walk cost. */
-const MAX_TREE_NODES = 5000
-/** Bound on concurrent subdirectory walks: the many `listDir` awaits would
- *  otherwise serialize into one long chain on first open of a big workspace. */
-const WALK_CONCURRENCY = 8
-/** Directory names to skip while walking: heavy/noise trees that drown the sidebar. */
+const DEFAULT_FONT_FAMILY = "'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace"
+/** Max files to visit while fuzzy-searching, to bound worst-case walk cost. */
+const SEARCH_NODE_BUDGET = 8000
+/** Max matched paths returned per search. */
+const SEARCH_RESULT_LIMIT = 20
+/** Directory names to skip while listing: heavy/noise trees that drown the sidebar. */
 const SKIP_DIRS = new Set([
   'node_modules', '.pnpm', '.pnpm-store', '.yarn', '.git', '.hg', '.svn',
   '.next', '.nuxt', '.cache', '.parcel-cache', '.turbo',
@@ -73,6 +75,25 @@ function mimeFor(path: string): string {
   if (lower.endsWith('.bmp')) return 'image/bmp'
   if (lower.endsWith('.ico')) return 'image/x-icon'
   return 'application/octet-stream'
+}
+
+/** True when `query` appears as a case-insensitive subsequence of `text`. */
+function fuzzyMatch(text: string, query: string): boolean {
+  let i = 0
+  for (let j = 0; j < text.length && i < query.length; j++) {
+    if (text[j] === query[i]) i++
+  }
+  return i === query.length
+}
+
+/** Lower score = better match: basename prefix > basename fuzzy > shorter path. */
+function scorePath(path: string, query: string): number {
+  const base = path.slice(path.lastIndexOf('/') + 1)
+  let score = 0
+  if (base.startsWith(query)) score -= 2
+  else if (fuzzyMatch(base, query)) score -= 1
+  score += path.length * 0.001
+  return score
 }
 
 /** Host-facing Remote for the floating file-preview window. */
@@ -101,81 +122,87 @@ export class FilePreviewService extends TypertRemoteService {
     return this.ctx.sandboxPolicy.resolve()
   }
 
-  /** Recursively list a directory into the wire tree shape (directories first). */
-  private async walk(
+  /** List one directory (single level) into the wire tree shape (directories first). */
+  @Remote('listDir')
+  async listDir(request: ListDirRequest): Promise<ListDirResult> {
+    try {
+      const policy = this.policyFor(request.sessionId)
+      const path = request.path === '.' ? '' : request.path
+      const target = path === ''
+        ? await this.ctx.fs.resolve(policy.workspaceRoot, {})
+        : await this.ctx.fs.resolve(path, { cwd: policy.workspaceRoot })
+      const entries = await this.ctx.fs.listDir(target)
+      const nodes: FileTreeNode[] = []
+      for (const entry of entries) {
+        const name = entry.name
+        if (!name) continue
+        const childRel = path ? `${path}/${name}` : name
+        if (entry.type === 'directory') {
+          if (SKIP_DIRS.has(name)) continue
+          nodes.push({ type: 'dir', name, path: childRel, children: [] })
+        } else if (entry.type === 'file') {
+          nodes.push(entry.size === undefined
+            ? { type: 'file', name, path: childRel }
+            : { type: 'file', name, path: childRel, size: entry.size })
+        } else {
+          nodes.push(entry.size === undefined
+            ? { type: 'other', name, path: childRel }
+            : { type: 'other', name, path: childRel, size: entry.size })
+        }
+      }
+      nodes.sort((a, b) => {
+        if (a.type === 'dir' && b.type !== 'dir') return -1
+        if (a.type !== 'dir' && b.type === 'dir') return 1
+        return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+      })
+      return { ok: true, value: nodes }
+    } catch (error) {
+      return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
+    }
+  }
+
+  /** Recursively collect workspace-relative file paths, bounded by `budget`. */
+  private async collectFiles(
     target: FsTarget,
     rel: string,
-    depth: number,
     budget: { remaining: number },
-  ): Promise<FileTreeNode[]> {
+    paths: string[],
+  ): Promise<void> {
     const entries = await this.ctx.fs.listDir(target)
-    const nodes: FileTreeNode[] = []
-    // Collect directories and walk them only after this directory's own entries,
-    // so a heavy subtree cannot starve sibling files out of the tree: budget
-    // truncation then only drops directories that come after the budget-eater.
-    const dirs: Array<{ target: FsTarget; name: string; childRel: string }> = []
+    const dirs: Array<{ target: FsTarget; childRel: string }> = []
     for (const entry of entries) {
-      if (budget.remaining <= 0) break
+      if (budget.remaining <= 0) return
       budget.remaining--
       const name = entry.name
       if (!name) continue
       const childRel = rel ? `${rel}/${name}` : name
       if (entry.type === 'directory') {
         if (SKIP_DIRS.has(name)) continue
-        dirs.push({ target: entry.target, name, childRel })
+        dirs.push({ target: entry.target, childRel })
       } else if (entry.type === 'file') {
-        nodes.push(entry.size === undefined
-          ? { type: 'file', name, path: childRel }
-          : { type: 'file', name, path: childRel, size: entry.size })
-      } else {
-        nodes.push(entry.size === undefined
-          ? { type: 'other', name, path: childRel }
-          : { type: 'other', name, path: childRel, size: entry.size })
+        paths.push(childRel)
       }
     }
-    const dirNodes = await this.walkDirs(dirs, depth, budget)
-    nodes.push(...dirNodes)
-    nodes.sort((a, b) => {
-      if (a.type === 'dir' && b.type !== 'dir') return -1
-      if (a.type !== 'dir' && b.type === 'dir') return 1
-      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
-    })
-    return nodes
+    for (const dir of dirs) {
+      if (budget.remaining <= 0) return
+      await this.collectFiles(dir.target, dir.childRel, budget, paths).catch(() => {})
+    }
   }
 
-  /** Walk collected subdirectories with bounded concurrency, sharing the node budget. */
-  private async walkDirs(
-    dirs: Array<{ target: FsTarget; name: string; childRel: string }>,
-    depth: number,
-    budget: { remaining: number },
-  ): Promise<FileTreeNode[]> {
-    if (depth <= 0) {
-      return dirs.map((dir): FileTreeNode => ({ type: 'dir', name: dir.name, path: dir.childRel, children: [] }))
-    }
-    const results: Array<FileTreeNode | undefined> = new Array(dirs.length)
-    let next = 0
-    const worker = async (): Promise<void> => {
-      while (true) {
-        if (budget.remaining <= 0) return
-        const i = next++
-        if (i >= dirs.length) return
-        const dir = dirs[i]
-        if (dir === undefined) return
-        const children = await this.walk(dir.target, dir.childRel, depth - 1, budget).catch(() => [])
-        results[i] = { type: 'dir', name: dir.name, path: dir.childRel, children }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(WALK_CONCURRENCY, dirs.length) }, worker))
-    return results.filter((n): n is FileTreeNode => n !== undefined)
-  }
-
-  @Remote('listTree')
-  async listTree(request: ListTreeRequest): Promise<ListTreeResult> {
+  @Remote('searchFiles')
+  async searchFiles(request: SearchFilesRequest): Promise<SearchFilesResult> {
     try {
       const policy = this.policyFor(request.sessionId)
+      const query = request.query.trim().toLowerCase()
+      if (query === '') return { ok: true, value: [] }
       const root = await this.ctx.fs.resolve(policy.workspaceRoot, {})
-      const tree = await this.walk(root, '', MAX_DEPTH, { remaining: MAX_TREE_NODES })
-      return { ok: true, value: tree }
+      const paths: string[] = []
+      await this.collectFiles(root, '', { remaining: SEARCH_NODE_BUDGET }, paths)
+      const matches = paths
+        .filter(path => fuzzyMatch(path.toLowerCase(), query))
+        .sort((a, b) => scorePath(a.toLowerCase(), query) - scorePath(b.toLowerCase(), query))
+        .slice(0, SEARCH_RESULT_LIMIT)
+      return { ok: true, value: matches }
     } catch (error) {
       return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
     }
@@ -274,7 +301,7 @@ export class FilePreviewService extends TypertRemoteService {
   @Remote('readConfig')
   async readConfig(request: ReadConfigRequest): Promise<ReadConfigResult> {
     const policy = this.policyFor(request.sessionId)
-    const cfg: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13 }
+    const cfg: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13, fontFamily: DEFAULT_FONT_FAMILY }
     let indentSet = false
     let tabsSet = false
 
@@ -285,6 +312,7 @@ export class FilePreviewService extends TypertRemoteService {
       if (typeof parsed.useTabs === 'boolean') { cfg.useTabs = parsed.useTabs; tabsSet = true }
       if (typeof parsed.pollInterval === 'number') cfg.pollInterval = parsed.pollInterval
       if (typeof parsed.fontSize === 'number') cfg.fontSize = parsed.fontSize
+      if (typeof parsed.fontFamily === 'string') cfg.fontFamily = parsed.fontFamily
     } catch { /* no dedicated config */ }
 
     let prettier: Record<string, unknown> | null = null

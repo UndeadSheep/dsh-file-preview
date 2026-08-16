@@ -209,6 +209,26 @@ function clientConfig(id: string, entry: string): UserConfig {
           `export default ${JSON.stringify(classMap)};`,
         ].join('\n')
       },
+    }, {
+      name: 'dsh-font-inline',
+      resolveId(source: string, importer: string | undefined) {
+        if (!/\.(woff2|woff|ttf)$/.test(source)) return null
+        const abs = importer !== undefined ? sourceAssetPath(source, importer) : source
+        return '\0font:' + abs
+      },
+      async load(id: string) {
+        if (!id.startsWith('\0font:')) return null
+        const fileId = id.slice('\0font:'.length)
+        this.addWatchFile(fileId)
+        if (!existsSync(fileId)) {
+          console.warn(`[dsh-font-inline] missing font file ${fileId} — code font falls back to system monospace`)
+          return 'export default ""'
+        }
+        const data = await readFile(fileId)
+        const ext = fileId.slice(fileId.lastIndexOf('.') + 1).toLowerCase()
+        const mime = ext === 'woff2' ? 'font/woff2' : ext === 'woff' ? 'font/woff' : 'font/ttf'
+        return `export default "data:${mime};base64,${data.toString('base64')}"`
+      },
     }],
     outputOptions: {
       entryFileNames: 'client.js',

@@ -19,6 +19,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { FilePreviewRemote } from './remote.ts'
 import { FilePreviewFab, FilePreviewWindow, requestOpenFile } from './FilePreviewWindow.tsx'
+import { ensureCodeFont } from './font.ts'
 
 /** Required services: the slot registry and the gateway's `remote` mount face. */
 export const inject = ['slots', 'remote']
@@ -66,6 +67,7 @@ function redirectFileOpens(ctx: ClientContext): () => void {
  * @param ctx - client root context.
  */
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
+  ensureCodeFont()
   const disposeRemote = await ctx.remote.$mount(filePreviewRemote)
   // Read the mounted namespace through ctx.get (a soft read) rather than the
   // `ctx.remote.filePreview` proxy access, which would require declaring

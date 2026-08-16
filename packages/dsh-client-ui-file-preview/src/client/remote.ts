@@ -8,9 +8,11 @@
 
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  ListTreeRequest,
-  ListTreeResult,
+  ListDirRequest,
+  ListDirResult,
   ReadConfigRequest,
+  SearchFilesRequest,
+  SearchFilesResult,
   ReadConfigResult,
   ReadFileRequest,
   ReadFileResult,
@@ -23,7 +25,8 @@ import type {
 } from '@undeadsheep/dsh-file-preview/types'
 
 export interface FilePreviewRemote {
-  listTree(request: ListTreeRequest): Promise<RemoteResult<ListTreeResult>>
+  listDir(request: ListDirRequest): Promise<RemoteResult<ListDirResult>>
+  searchFiles(request: SearchFilesRequest): Promise<RemoteResult<SearchFilesResult>>
   readFile(request: ReadFileRequest): Promise<RemoteResult<ReadFileResult>>
   readImage(request: ReadImageRequest): Promise<RemoteResult<ReadImageResult>>
   writeFile(request: WriteFileRequest): Promise<RemoteResult<WriteFileResult>>

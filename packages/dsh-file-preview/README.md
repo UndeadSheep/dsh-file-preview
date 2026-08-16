@@ -11,7 +11,7 @@ The browser UI lives in a separate package:
 
 | Method | Request | Result |
 |--------|---------|--------|
-| `listTree` | `{ sessionId }` | `Ok<FileTreeNode[]> \| Rejected` |
+| `listDir` | `{ sessionId, path }` | `Ok<FileTreeNode[]> \| Rejected` |
 | `readFile` | `{ sessionId, path }` | `Ok<{ path, content }> \| Rejected` |
 | `readImage` | `{ sessionId, path }` | `Ok<{ path, mimeType, data }> \| Rejected` |
 | `writeFile` | `{ sessionId, path, content }` | `Ok<{ path }> \| Rejected` |
@@ -23,8 +23,10 @@ convention; the generated `./remote` face wraps them in the `RemoteResult` carri
 Wire codecs are generated from the `@Remote` method types by typert codegen — there is
 no hand-written schema file.
 
-`listTree` skips heavy/noise directories (`node_modules`, `.git`, `.next`, …) and caps the
-returned tree at 5000 nodes, so large workspaces stay fast.
+`listDir` lists a single directory (`path` = `''` for the workspace root) and skips
+heavy/noise directories (`node_modules`, `.git`, `.next`, …); dir nodes carry empty
+`children`, which the browser half fills lazily by calling `listDir` again when a
+directory is expanded.
 
 ## Config
 

@@ -71,9 +71,17 @@ export interface Rejected<E extends FilePreviewFailure> {
   readonly error: E
 }
 
-/** Request: list the workspace file tree for one Session. */
-export interface ListTreeRequest {
+/** Request: list one workspace directory (single level, directories first). */
+export interface ListDirRequest {
   readonly sessionId: SessionId
+  /** Workspace-relative directory path; '' or '.' for the workspace root. */
+  readonly path: string
+}
+
+/** Request: fuzzy-search workspace file paths for one Session. */
+export interface SearchFilesRequest {
+  readonly sessionId: SessionId
+  readonly query: string
 }
 
 /** Request: read one UTF-8 text file. */
@@ -105,9 +113,14 @@ export interface ReadConfigRequest {
   readonly sessionId: SessionId
 }
 
-/** Full tree listing outcome. */
-export type ListTreeResult =
+/** One directory listing; dir nodes carry empty children, filled lazily by the client. */
+export type ListDirResult =
   | Ok<FileTreeNode[]>
+  | Rejected<FilePreviewNoWorkspace | FilePreviewIoFailure>
+
+/** Fuzzy-search outcome: matched workspace-relative file paths (best first). */
+export type SearchFilesResult =
+  | Ok<string[]>
   | Rejected<FilePreviewNoWorkspace | FilePreviewIoFailure>
 
 /** Read one UTF-8 text file. */
@@ -162,6 +175,8 @@ export interface ConfigPayload {
   pollInterval: number
   /** Preview/editor text size in px. */
   fontSize: number
+  /** Preview/editor font stack (CSS font-family). */
+  fontFamily: string
 }
 
 /** Config resolution always succeeds (missing files yield defaults). */

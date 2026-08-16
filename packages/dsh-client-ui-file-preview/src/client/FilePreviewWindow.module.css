@@ -48,6 +48,20 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
+.themeBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  width: 28px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.themeBtn:hover { background: rgba(0, 0, 0, 0.08); }
+
 .toolbar {
   display: flex;
   gap: 6px;
@@ -68,6 +82,61 @@
 .input:focus {
   border-color: #7c9cff;
   box-shadow: 0 0 0 2px rgba(124, 156, 255, 0.25);
+}
+
+.quickOpen { position: relative; flex: 1; }
+.quickOpen .input { width: 100%; padding-right: 28px; }
+
+.clearBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.clearBtn:hover { color: #333; background: rgba(0, 0, 0, 0.06); }
+
+.quickOpenList {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+  padding: 4px 0;
+}
+
+.quickOpenItem {
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  color: #333;
+}
+.quickOpenItem mark { background: #ffe08a; color: inherit; }
+.quickOpenItemActive { background: #e8eeff; color: #2f56c9; }
+
+.inlineError {
+  padding: 6px 12px;
+  color: #c0392b;
+  font-size: 12px;
+  background: #fdf0ee;
+  border-top: 1px solid rgba(192, 57, 43, 0.15);
 }
 
 .btn {
@@ -289,6 +358,69 @@
 .saveBtn:hover:not(:disabled) { background: #2f5cb8; }
 .saveBtn:disabled { opacity: 0.45; cursor: default; }
 
+.codeEditor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.imageView {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-conic-gradient(#ececec 0 25%, #fafafa 0 50%) 0 0 / 20px 20px;
+  cursor: grab;
+}
+
+.imageView img {
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.imageLoading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.imageToolbar {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+}
+
+.imageToolbar button {
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.imageToolbar button:hover {
+  background: #ffffff;
+}
+
 .editorWrap {
   flex: 1;
   position: relative;
@@ -378,3 +510,98 @@
 }
 
 .fabBtn:hover { background: #ffe1ec; }
+
+/* Dark mode — the window root carries both `win` and `dark` (One Dark palette). */
+.dark {
+  background: #282c34;
+  color: #abb2bf;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.dark .header {
+  background: linear-gradient(180deg, #21252b, #1c1f24);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .sideBtn,
+.dark .closeBtn { color: #abb2bf; }
+.dark .sideBtn:hover,
+.dark .closeBtn:hover,
+.dark .themeBtn:hover { background: rgba(255, 255, 255, 0.1); }
+
+.dark .toolbar {
+  background: #282c34;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .input {
+  background: #21252b;
+  color: #abb2bf;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark .btn {
+  background: #3e4451;
+  color: #abb2bf;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.dark .btn:hover { background: #4b5263; }
+
+.dark .sidebar {
+  background: #21252b;
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+.dark .rail { background: #21252b; border-right-color: rgba(255, 255, 255, 0.08); }
+.dark .railBtn { color: #abb2bf; }
+.dark .sidebarTitle { color: #abb2bf; }
+
+.dark .body { background: #282c34; }
+
+.dark .hint { color: #5c6370; }
+.dark .meta { color: #5c6370; }
+
+.dark .actions {
+  background: #21252b;
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .modeBtn {
+  background: #3e4451;
+  color: #abb2bf;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.dark .modeBtn:hover { background: #4b5263; }
+.dark .modeBtnOn {
+  background: #2c313a;
+  border-color: #528bff;
+  color: #61afef;
+}
+
+.dark .fontSize { color: #5c6370; }
+.dark .sep { background: rgba(255, 255, 255, 0.2); }
+
+.dark .saveBtn { background: #528bff; }
+.dark .saveBtn:hover:not(:disabled) { background: #61afef; }
+
+.dark .treeNode { color: #abb2bf; }
+.dark .treeNode:hover { background: rgba(255, 255, 255, 0.06); }
+.dark .treeFileOn { background: #2c313a; color: #61afef; }
+.dark .caret { color: #5c6370; }
+
+.dark .out a { color: #61afef; }
+.dark .out code { background: rgba(255, 255, 255, 0.1); }
+.dark .out pre { background: #21252b; border-color: rgba(255, 255, 255, 0.1); }
+.dark .out blockquote { border-left-color: #3e4451; color: #5c6370; }
+.dark .out table { border-color: #3e4451; }
+.dark .out th, .dark .out td { border-color: #3e4451; }
+.dark .out th { background: #21252b; }
+.dark .out h1, .dark .out h2 { border-bottom-color: rgba(255, 255, 255, 0.12); }
+
+.dark .clearBtn { color: #5c6370; }
+.dark .clearBtn:hover { color: #abb2bf; background: rgba(255, 255, 255, 0.08); }
+.dark .quickOpenList { background: #21252b; border-color: rgba(255, 255, 255, 0.12); }
+.dark .quickOpenItem { color: #abb2bf; }
+.dark .quickOpenItem mark { background: #5c4a1e; }
+.dark .quickOpenItemActive { background: #2c313a; color: #61afef; }
+.dark .inlineError { color: #e06c75; background: #3a2626; border-top-color: rgba(224, 108, 117, 0.2); }

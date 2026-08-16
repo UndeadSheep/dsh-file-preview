@@ -14,9 +14,13 @@ import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
-import {
-  escapeHtml, highlight, indentUnit, isMdPath, langFor, leadingIndent, trimmedLine,
-} from './render.ts'
+import { highlight, isImagePath, isMdPath } from './render.ts'
+import { CodeEditor } from './CodeEditor.tsx'
+import { ImageView } from './ImageView.tsx'
+import { DEFAULT_CODE_FONT_FAMILY } from './font.ts'
+import { DARK_THEME } from './theme.ts'
+import { QuickOpen } from './QuickOpen.tsx'
+import { recordRecent } from './recent.ts'
 import css from './FilePreviewWindow.module.css'
 
 /** Module-level open store shared by the header button and the overlay window. */
@@ -71,9 +75,10 @@ function isExternalImage(src: string): boolean {
   return src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:') || src.startsWith('//')
 }
 
-/** Resolve a markdown image src against the markdown file's directory. */
-function resolveImagePath(baseDir: string, src: string): string {
+/** Resolve a markdown link/image path against the markdown file's directory. */
+function resolveLocalPath(baseDir: string, src: string): string {
   if (src.startsWith('/')) return src.slice(1)
+  if (/^[A-Za-z]:[\\/]/.test(src)) return src
   const parts: string[] = []
   for (const seg of (baseDir + src).split('/')) {
     if (seg === '' || seg === '.') continue
@@ -81,6 +86,11 @@ function resolveImagePath(baseDir: string, src: string): string {
     else parts.push(seg)
   }
   return parts.join('/')
+}
+
+/** True for links that should open outside the preview (scheme or protocol-relative). */
+function isExternalHref(href: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')
 }
 
 /** Renders one markdown image, resolving local/relative srcs to data URLs via readImage. */
@@ -98,7 +108,7 @@ function MarkdownImage(props: {
   const imgRef = useRef<HTMLImageElement>(null)
   const external = src !== undefined && isExternalImage(src)
   const localPath = !external && sessionId !== undefined && src !== undefined
-    ? resolveImagePath(baseDir, src)
+    ? resolveLocalPath(baseDir, src)
     : undefined
   const cacheKey = localPath !== undefined && sessionId !== undefined
     ? `${String(sessionId)}::${localPath}`
@@ -160,7 +170,37 @@ function MarkdownCode(props: {
   return <code className={className}>{children}</code>
 }
 
-const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13 }
+/** Renders one markdown link: local file links open in the preview, external links open in a new tab. */
+function MarkdownLink(props: {
+  href: string | undefined
+  baseDir: string
+  loadRef: React.MutableRefObject<(path: string) => void>
+  children: React.ReactNode
+}): React.ReactElement {
+  const { href, baseDir, loadRef, children } = props
+  if (href === undefined) return <a>{children}</a>
+  if (isExternalHref(href)) {
+    return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  }
+  if (href.startsWith('#')) {
+    return <a href={href}>{children}</a>
+  }
+  const resolved = resolveLocalPath(baseDir, href)
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        loadRef.current(resolved)
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
+const DEFAULT_CONFIG: ConfigPayload = { indentSize: 2, useTabs: false, pollInterval: 1500, fontSize: 13, fontFamily: DEFAULT_CODE_FONT_FAMILY }
 
 /** Stable plugin arrays so `<Markdown>` doesn't re-parse on every window render. */
 const MARKDOWN_REMARK_PLUGINS = [remarkGfm]
@@ -230,27 +270,32 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     y: number
     corner: string
   }>(null)
-  const [pathInput, setPathInput] = useState('')
-  const [file, setFile] = useState<null | { path: string; name: string; isMarkdown: boolean }>(null)
+  const [file, setFile] = useState<null | { path: string; name: string; isMarkdown: boolean; isImage: boolean; imageUrl?: string }>(null)
   const [source, setSource] = useState('')
   const [mode, setMode] = useState<'preview' | 'edit'>('preview')
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [tree, setTree] = useState<FileTreeNode[]>([])
+  const [dirs, setDirs] = useState<Record<string, FileTreeNode[]>>({})
   const [theme, setTheme] = useState<{
     colors: PreviewThemeColors
     bg: string | undefined
     fg: string | undefined
   }>({ colors: {}, bg: undefined, fg: undefined })
   const [config, setConfig] = useState<ConfigPayload>(DEFAULT_CONFIG)
-  const editorPreRef = useRef<HTMLPreElement>(null)
+  const [dark, setDark] = useState(false)
   const savedSourceRef = useRef('')
-  const treeSignatureRef = useRef('')
+  const dirSignaturesRef = useRef<Record<string, string>>({})
   const themeSignatureRef = useRef('')
   const configSignatureRef = useRef('')
-  const treeInFlightRef = useRef<Promise<void> | null>(null)
+  const dirInFlightRef = useRef<Record<string, Promise<void>>>({})
+  const dirEpochRef = useRef(0)
+  const fileCacheRef = useRef<Map<string, string>>(new Map())
   const loadRef = useRef<(path: string) => void>(() => {})
+
+  const effectiveColors = dark ? DARK_THEME.colors : theme.colors
+  const effectiveBg = dark ? DARK_THEME.bg : theme.bg
+  const effectiveFg = dark ? DARK_THEME.fg : theme.fg
 
   // Memoized markdown components: keep the `img`/`code` component identities stable across
   // re-renders (the file tree polls every 1.5s), so images aren't unmounted/remounted — which
@@ -270,9 +315,12 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       />
     ),
     code: (props) => (
-      <MarkdownCode className={props.className} children={props.children} colors={theme.colors} />
+      <MarkdownCode className={props.className} children={props.children} colors={effectiveColors} />
     ),
-  }), [remote, sessionId, baseDir, theme.colors])
+    a: (props) => (
+      <MarkdownLink href={props.href} baseDir={baseDir} loadRef={loadRef}>{props.children}</MarkdownLink>
+    ),
+  }), [remote, sessionId, baseDir, effectiveColors, loadRef])
 
   // Memoize the rendered markdown so unrelated re-renders (window drag/resize,
   // font-size tweaks, tree polls) don't re-run the remark/rehype parse of a
@@ -298,13 +346,24 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
 
   useEffect(() => subscribeOpen(() => setOpenState(mdOpen)), [])
   useEffect(() => { if (open) reveal() }, [open])
-  useEffect(() => { if (open && sessionId) void refreshTree() }, [open, sessionId])
+  useEffect(() => { if (open && sessionId) void loadDir('') }, [open])
   useEffect(() => {
-    if (sessionId) { void refreshTree(); void loadTheme(); void loadConfig() }
+    if (!sessionId) return
+    // Session change (possibly a different workspace): drop the previous tree
+    // cache and collapse state so the sidebar reads the new workspace.
+    dirEpochRef.current++
+    dirSignaturesRef.current = {}
+    dirInFlightRef.current = {}
+    fileCacheRef.current = new Map()
+    setDirs({})
+    setExpanded({})
+    void loadDir('')
+    void loadTheme()
+    void loadConfig()
   }, [sessionId])
   useEffect(() => {
     if (!open || !sessionId) return
-    const id = setInterval(() => { void refreshTree() }, config.pollInterval || 1500)
+    const id = setInterval(() => { refreshLoadedDirs() }, config.pollInterval || 1500)
     return () => clearInterval(id)
   }, [open, sessionId, config.pollInterval])
   // Redirected file opens (file-mention links + tool rows) route here: open the
@@ -319,29 +378,44 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     setPos({ x: Math.max(8, vp.w - w - 16), y: 16 })
   }
 
-  function refreshTree(): Promise<void> {
+  /** List one directory (single level), coalescing concurrent loads and skipping no-op updates. */
+  function loadDir(path: string): Promise<void> {
     if (!sessionId) return Promise.resolve()
-    // Coalesce concurrent walks (open + poll + session change) into one request,
-    // and skip the state update when the tree hasn't changed so the 1.5s poll
-    // doesn't re-render the whole tree / re-parse an open markdown for nothing.
-    const inflight = treeInFlightRef.current
-    if (inflight !== null) return inflight
+    const inflight = dirInFlightRef.current[path]
+    if (inflight !== undefined) return inflight
+    const epoch = dirEpochRef.current
     const task = (async () => {
+      let nodes: FileTreeNode[] | null = null
       try {
-        const res = unwrap<FileTreeNode[]>(await remote.listTree({ sessionId }))
-        if (res.ok) {
-          const signature = JSON.stringify(res.value)
-          if (signature !== treeSignatureRef.current) {
-            treeSignatureRef.current = signature
-            setTree(res.value)
-          }
-        }
+        const res = unwrap<FileTreeNode[]>(await remote.listDir({ sessionId, path }))
+        if (res.ok) nodes = res.value
       } catch {
-        /* best-effort poll: keep the last known tree on transient errors */
+        /* keep the last known listing on transient errors */
       }
-    })().finally(() => { treeInFlightRef.current = null })
-    treeInFlightRef.current = task
+      if (epoch !== dirEpochRef.current) return // stale: session switched mid-flight
+      if (nodes !== null) {
+        const value: FileTreeNode[] = nodes
+        const signature = JSON.stringify(value)
+        if (signature !== dirSignaturesRef.current[path]) {
+          dirSignaturesRef.current[path] = signature
+          setDirs(prev => ({ ...prev, [path]: value }))
+        }
+      } else {
+        // A failed/empty dir shouldn't stay "加载中…" forever.
+        setDirs(prev => (prev[path] === undefined ? { ...prev, [path]: [] } : prev))
+      }
+      delete dirInFlightRef.current[path]
+    })()
+    dirInFlightRef.current[path] = task
     return task
+  }
+
+  /** Re-list the root and every currently-expanded directory (used by the poll). */
+  function refreshLoadedDirs(): void {
+    void loadDir('')
+    for (const path of Object.keys(expanded)) {
+      if (expanded[path]) void loadDir(path)
+    }
   }
 
   async function loadTheme(): Promise<void> {
@@ -368,26 +442,56 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   }
 
   function refreshAll(): void {
-    void refreshTree()
+    refreshLoadedDirs()
     void loadTheme()
     void loadConfig()
   }
 
   async function load(path: string): Promise<void> {
     if (!path || !sessionId) return
+    if (isImagePath(path)) {
+      setLoading(true)
+      setError(null)
+      const res = unwrap<ImagePayload>(await remote.readImage({ sessionId, path }))
+      if (res.ok) {
+        recordRecent(path)
+        const imageUrl = `data:${res.value.mimeType};base64,${res.value.data}`
+        setFile({ path, name: path, isMarkdown: false, isImage: true, imageUrl })
+        setSource('')
+        setDirty(false)
+        savedSourceRef.current = ''
+        setMode('preview')
+      } else {
+        setError(res.error)
+      }
+      setLoading(false)
+      return
+    }
+    const cached = fileCacheRef.current.get(path)
+    if (cached !== undefined) {
+      recordRecent(path)
+      setFile({ path, name: path, isMarkdown: isMdPath(path), isImage: false })
+      setSource(cached)
+      setDirty(false)
+      savedSourceRef.current = cached
+      setMode('preview')
+      setError(null)
+      return
+    }
     setLoading(true)
     setError(null)
     const res = unwrap<{ path: string; content: string }>(await remote.readFile({ sessionId, path }))
     if (res.ok) {
+      recordRecent(path)
       const content = res.value.content
       const isMarkdown = isMdPath(path)
-      setFile({ path, name: res.value.path || path, isMarkdown })
+      fileCacheRef.current.set(path, content)
+      setFile({ path, name: res.value.path || path, isMarkdown, isImage: false })
       setSource(content)
       setDirty(false)
       savedSourceRef.current = content
       setMode('preview')
     } else {
-      setFile(null)
       setError(res.error)
     }
     setLoading(false)
@@ -408,7 +512,9 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   }
 
   function toggleDir(path: string): void {
-    setExpanded(prev => ({ ...prev, [path]: !prev[path] }))
+    const willOpen = !expanded[path]
+    setExpanded(prev => ({ ...prev, [path]: willOpen }))
+    if (willOpen) void loadDir(path)
   }
 
   function changeFontSize(delta: number): void {
@@ -435,7 +541,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
 
   if (!open) return null
 
-  const fontSizePx = `${config.fontSize || 13}px`
+  const rootChildren = dirs['']
   const actions = (
     <div className={css.actions}>
       <button className={css.modeBtn} title="减小字号" onClick={() => changeFontSize(-1)}>A−</button>
@@ -451,83 +557,42 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   let body: React.ReactNode = null
   if (loading) {
     body = <div className={css.hint}>加载中…</div>
-  } else if (error !== null) {
-    body = <div className={`${css.scroll} ${css.error}`}>{error}</div>
   } else if (file === null) {
-    body = <div className={css.hint}>点击左侧文件预览</div>
+    body = error !== null
+      ? <div className={`${css.scroll} ${css.error}`}>{error}</div>
+      : <div className={css.hint}>点击左侧文件预览</div>
+  } else if (file.isImage) {
+    body = <ImageView url={file.imageUrl ?? ''} name={file.name} />
   } else if (mode === 'edit') {
-    const lang = langFor(file.path)
-    const editorHtml = (lang ? highlight(source, lang, theme.colors) : escapeHtml(source)) + '\n'
-    const wrapStyle = theme.bg ? { background: theme.bg } : undefined
-    const preStyle: React.CSSProperties = { fontSize: fontSizePx, color: theme.fg ?? '#1a1a1a' }
-    const caretColor = theme.fg || '#1a1a1a'
     body = (
-      <div className={css.editorWrap} style={wrapStyle}>
-        <pre ref={editorPreRef} className={css.editorBg} aria-hidden style={preStyle} dangerouslySetInnerHTML={{ __html: editorHtml }} />
-        <textarea
-          className={css.editor}
-          defaultValue={source}
-          spellCheck={false}
-          autoFocus
-          style={{ caretColor, fontSize: fontSizePx }}
-          onScroll={(e) => {
-            if (editorPreRef.current) {
-              editorPreRef.current.scrollTop = e.currentTarget.scrollTop
-              editorPreRef.current.scrollLeft = e.currentTarget.scrollLeft
-            }
-          }}
-          onChange={(e) => { applyEdit(e.currentTarget.value) }}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing || (e.nativeEvent as KeyboardEvent).keyCode === 229) return
-            const ta = e.currentTarget
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              const start = ta.selectionStart
-              const before = ta.value.slice(0, start)
-              const lineStart = before.lastIndexOf('\n') + 1
-              const lineText = before.slice(lineStart)
-              let indent = leadingIndent(lineText)
-              const lastCh = trimmedLine(lineText).slice(-1)
-              if (lastCh === '{' || lastCh === '[' || lastCh === '(') indent += indentUnit(config)
-              // execCommand('insertText') goes through the browser's input path, so it
-              // keeps the native undo/redo stack intact (unlike setting ta.value directly).
-              document.execCommand('insertText', false, '\n' + indent)
-            } else if (e.key === 'Tab') {
-              e.preventDefault()
-              document.execCommand('insertText', false, indentUnit(config))
-            } else if (e.key === '"' || e.key === "'" || e.key === '`') {
-              e.preventDefault()
-              const start = ta.selectionStart
-              const end = ta.selectionEnd
-              const selected = ta.value.slice(start, end)
-              document.execCommand('insertText', false, e.key + selected + e.key)
-              ta.setSelectionRange(start + 1, start + 1 + selected.length)
-            } else if (e.key === '(' || e.key === '[' || e.key === '{') {
-              e.preventDefault()
-              const start = ta.selectionStart
-              const end = ta.selectionEnd
-              const selected = ta.value.slice(start, end)
-              const close = e.key === '(' ? ')' : e.key === '[' ? ']' : '}'
-              document.execCommand('insertText', false, e.key + selected + close)
-              ta.setSelectionRange(start + 1, start + 1 + selected.length)
-            }
-          }}
-        />
-      </div>
+      <CodeEditor
+        value={source}
+        path={file.path}
+        editable
+        onChange={applyEdit}
+        colors={effectiveColors}
+        bg={effectiveBg}
+        fg={effectiveFg}
+        fontSize={config.fontSize || 13}
+        fontFamily={config.fontFamily}
+        dark={dark}
+      />
     )
   } else if (file.isMarkdown) {
     body = markdownBody
   } else {
-    const lang = langFor(file.path)
-    const plainHtml = lang ? highlight(source, lang, theme.colors) : escapeHtml(source)
-    const scrollStyle = theme.bg ? { background: theme.bg } : undefined
-    const preStyle: React.CSSProperties = { fontSize: fontSizePx }
-    if (theme.fg) preStyle.color = theme.fg
     body = (
-      <div className={css.scroll} style={scrollStyle}>
-        <div className={css.meta} style={theme.fg ? { color: theme.fg } : undefined}>{file.name}</div>
-        <pre className={css.plain} style={preStyle} dangerouslySetInnerHTML={{ __html: plainHtml }} />
-      </div>
+      <CodeEditor
+        value={source}
+        path={file.path}
+        editable={false}
+        colors={effectiveColors}
+        bg={effectiveBg}
+        fg={effectiveFg}
+        fontSize={config.fontSize || 13}
+        fontFamily={config.fontFamily}
+        dark={dark}
+      />
     )
   }
 
@@ -535,6 +600,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     const style = { paddingLeft: 10 + depth * 14 }
     if (node.type === 'dir') {
       const isOpen = !!expanded[node.path]
+      const children = dirs[node.path]
       return (
         <div key={node.path}>
           <button className={css.treeNode} style={style} title={node.path} onClick={() => toggleDir(node.path)}>
@@ -542,7 +608,11 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
             <span className={css.nodeIcon}>📁</span>
             <span className={css.nodeName}>{node.name}</span>
           </button>
-          {isOpen && node.children.map(c => renderNode(c, depth + 1))}
+          {isOpen && (children === undefined
+            ? <div className={css.hint}>加载中…</div>
+            : children.length > 0
+              ? children.map(c => renderNode(c, depth + 1))
+              : <div className={css.hint}>无文件</div>)}
         </div>
       )
     }
@@ -553,7 +623,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
         className={active ? `${css.treeNode} ${css.treeFileOn}` : css.treeNode}
         style={style}
         title={node.path}
-        onClick={() => { setPathInput(node.path); void load(node.path) }}
+        onClick={() => { void load(node.path) }}
       >
         <span className={css.caret}> </span>
         <span className={css.nodeIcon}>{node.type === 'file' ? '📄' : '▪'}</span>
@@ -564,7 +634,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
 
   return (
     <div
-      className={css.win}
+      className={dark ? `${css.win} ${css.dark}` : css.win}
       style={{ left: pos.x, top: pos.y, width: size.w, height: size.h }}
       onKeyDown={handleKeyDown}
     >
@@ -588,18 +658,26 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       >
         <button className={css.sideBtn} title={sidebarOpen ? '收起文件列表' : '展开文件列表'} onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
         <div className={css.title}>文件预览</div>
+        <button className={css.themeBtn} title={dark ? '切换到浅色模式' : '切换到深色模式'} onClick={() => setDark(!dark)}>
+          {dark ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle cx="12" cy="12" r="4" fill="#f6b83d" />
+              <g stroke="#f6b83d" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 2v3" /><path d="M12 19v3" /><path d="M4.22 4.22l2.12 2.12" /><path d="M17.66 17.66l2.12 2.12" /><path d="M2 12h3" /><path d="M19 12h3" /><path d="M4.22 19.78l2.12-2.12" /><path d="M17.66 6.34l2.12-2.12" />
+              </g>
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+              <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" fill="#f6b83d" />
+            </svg>
+          )}
+        </button>
         <button className={css.closeBtn} title="收起" onClick={() => setOpen(false)}>—</button>
       </div>
       <div className={css.toolbar}>
-        <input
-          className={css.input}
-          value={pathInput}
-          placeholder="输入文件路径（相对工作区或绝对）"
-          onChange={e => setPathInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') void load(pathInput) }}
-        />
-        <button className={css.btn} onClick={() => void load(pathInput)}>打开</button>
+        <QuickOpen sessionId={sessionId} remote={remote} onOpen={path => { void load(path) }} />
       </div>
+      {error !== null && <div className={css.inlineError}>{error}</div>}
       <div className={css.main}>
         {sidebarOpen
           ? (
@@ -610,9 +688,11 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
                 <button className={css.btn} title="刷新目录与配置" onClick={refreshAll}>↻</button>
                 <button className={css.btn} title="折叠侧边栏" onClick={() => setSidebarOpen(false)}>◀</button>
               </div>
-              {tree.length > 0
-                ? <div className={css.sidebarList}>{tree.map(n => renderNode(n, 0))}</div>
-                : <div className={css.hint}>无文件</div>}
+              {rootChildren === undefined
+                ? <div className={css.hint}>加载中…</div>
+                : rootChildren.length > 0
+                  ? <div className={css.sidebarList}>{rootChildren.map(n => renderNode(n, 0))}</div>
+                  : <div className={css.hint}>无文件</div>}
             </div>
           )
           : (
@@ -622,7 +702,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
           )}
         <div className={css.body}>
           {body}
-          {file !== null && actions}
+          {file !== null && !file.isImage && actions}
         </div>
       </div>
       {(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map(corner => (
