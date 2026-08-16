@@ -44,6 +44,8 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
   const [open, setOpen] = useState(false)
   const [recent, setRecent] = useState<string[]>(() => loadRecent())
   const inputRef = useRef<HTMLInputElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const focusedRef = useRef(false)
 
   function openPath(path: string): void {
     setValue('')
@@ -53,12 +55,12 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
   }
 
   // Debounced search (or recent files when the query is empty).
+  // Only updates the candidate list — dropdown visibility is driven by focus / click-outside.
   useEffect(() => {
     if (!sessionId) return
     const q = value.trim()
     if (q === '') {
       setItems(recent)
-      setOpen(recent.length > 0)
       setActiveIndex(-1)
       return
     }
@@ -68,20 +70,34 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
       if (cancelled) return
       const matches = res.ok && res.value.ok ? res.value.value : []
       setItems(matches)
-      setOpen(matches.length > 0)
       setActiveIndex(matches.length > 0 ? 0 : -1)
+      if (focusedRef.current) setOpen(matches.length > 0)
     }, 150)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [value, sessionId, remote, recent])
+
+  // Click outside the input + dropdown closes the suggestion list.
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [open])
 
   function onKeyDown(e: React.KeyboardEvent): void {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       if (items.length === 0) return
+      setOpen(true)
       setActiveIndex(i => (i + 1) % items.length)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (items.length === 0) return
+      setOpen(true)
       setActiveIndex(i => (i <= 0 ? items.length - 1 : i - 1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
@@ -99,26 +115,34 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
 
   function clear(): void {
     setValue('')
-    setItems([])
-    setOpen(false)
+    setItems(loadRecent())
+    setOpen(true)
     inputRef.current?.focus()
   }
 
   return (
-    <div className={css.quickOpen}>
+    <div className={css.quickOpen} ref={wrapRef}>
       <input
         ref={inputRef}
         className={css.input}
         value={value}
         placeholder="输入文件路径 / 搜索文件"
-        onChange={e => setValue(e.target.value)}
+        onChange={e => {
+          setValue(e.target.value)
+          setOpen(true)
+        }}
         onKeyDown={onKeyDown}
         onFocus={() => {
+          focusedRef.current = true
           const r = loadRecent()
           setRecent(r)
-          if (value.trim() === '' && r.length > 0) { setItems(r); setOpen(true) }
+          if (value.trim() === '') setItems(r)
+          setOpen(true)
         }}
-        onBlur={() => setOpen(false)}
+        onBlur={() => {
+          focusedRef.current = false
+          setOpen(false)
+        }}
       />
       {value !== '' && (
         <button type="button" className={css.clearBtn} title="清空" onMouseDown={e => { e.preventDefault(); clear() }}>×</button>
