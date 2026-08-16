@@ -6,12 +6,34 @@
 
 抱书女仆帮你偷瞄工作区 —— DeepSeek Harness 的「悬浮文件预览窗口」插件（宿主 Typert Remote 服务 + 浏览器客户端悬浮窗）。
 
-## 界面截图
+## 功能演示
 
-<p>
-  <img src="assets/sc.png" width="49%" alt="悬浮文件预览：Markdown 渲染" />
-  <img src="assets/sc1.png" width="49%" alt="悬浮文件预览：代码编辑" />
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/btnPos.gif" alt="点会话头按钮打开悬浮预览窗" />
+      <br /><strong>一键唤出</strong>
+      <br />会话头部按钮打开悬浮窗
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/change.gif" alt="拉动边缘调整悬浮窗宽高" />
+      <br /><strong>拖改大小</strong>
+      <br />拉动边缘调整悬浮窗宽高
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/write.gif" alt="在悬浮窗里编辑并保存文件" />
+      <br /><strong>预览也能改</strong>
+      <br />切编辑，保存写回工作区
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/clickOpen.gif" alt="点会话里的文件路径打开预览" />
+      <br /><strong>对话里偷瞄</strong>
+      <br />点路径进预览，不唤系统打开
+    </td>
+  </tr>
+</table>
 
 ## 安装
 
@@ -37,11 +59,6 @@ dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 
 移除后重启 `dsh web` 生效。
 
-已发布到 npm（作用域 `@undeadsheep`）：
-
-- [`@undeadsheep/dsh-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-file-preview) — 组合包（bundle）+ 宿主服务
-- [`@undeadsheep/dsh-client-ui-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-client-ui-file-preview) — 客户端 UI
-
 ## 功能
 
 - **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。
@@ -50,7 +67,6 @@ dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 - **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览。
 - **图片懒加载 + 缓存**：md 里的本地图片滚动到视口附近（提前 200px）才读取；解析结果按字节预算缓存（16MB，淘汰最老），不重复请求、不闪烁。
 - **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔。详见[宿主包 README](packages/dsh-file-preview/README.md)。
-
 
 ## 目录结构
 
@@ -87,16 +103,6 @@ pnpm build        # = build:host + build:client
 2. `tsdown --env.DSH_BUILD_FACE host`：打包宿主 `lib/index.js`，并跑 Typert 代码生成，产出 `typert.host.js` + `typert.remote-client.js`。
 3. `tsdown --env.DSH_BUILD_FACE client`：出浏览器 bundle `lib/client.js`（CSS Module 内联 + `__ModuleLoader__` 包装）。
 
-> 客户端 Markdown 渲染用 `react-markdown` + `remark-gfm` + `rehype-raw` + `rehype-sanitize`
-> （内联打包进 `lib/client.js`，所以 bundle 有 1MB+）；统一生态依赖的 node 内置模块由
-> `build/tsdown.client.ts` 里的 shim 转成浏览器实现。
-
-> **Typert 产物在本仓库内生成**。`dsh-typert-generator` 要求 `@deepseek-ai/dsh-typert-protocol`
-> 的源码在 workspace 里（从 npm 装的 `.d.ts` 它识别不到 `@Remote`），所以本仓库 vendor 了该协议的源码
-> 到 `packages/dsh-typert-protocol/`（仅用于类型检查与代码生成；运行时仍从 npm 解析官方包）。
-
-> 依赖的 `@deepseek-ai/*` 是官方已发布包，从 npm 解析（见根 `package.json` devDependencies）。
-
 ## 本地验证（一键）
 
 改完源码后，一条命令构建 + 打包 + 装进干净的 dsh profile 并自动起 `dsh web`（自动处理「测试形态」的客户端依赖）：
@@ -128,18 +134,12 @@ pnpm dev
    > 也是同样的转换）。发布后核对：
    >
    > ```powershell
-   > npm view @undeadsheep/dsh-file-preview dependencies
+   > npm view @<YourNpmName>/dsh-file-preview dependencies
    > ```
    >
    > 客户端依赖应是 `^<version>`，不能是 `workspace:^`。
    >
    > prerelease 也带 `--tag latest`（本插件尚未发过 stable，`latest` 即最新 rc）。
-
-## 已知限制
-
-- **git 安装（`dsh plugin add github:...`）**：本仓库是多包工作区，git 安装需单包仓库 + 自包含 `prepare`
-  构建脚本；当前推荐 npm / tarball 方式。
-- 预览为纯文本（二进制/超限文件返回 `not-text` / `too-large`）、语法高亮为轻量 tokenizer、自动刷新为轮询（详见 `packages/dsh-file-preview/README.md`）。
 
 ## 作者与许可
 
