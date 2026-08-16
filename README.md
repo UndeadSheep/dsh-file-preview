@@ -52,21 +52,23 @@
 需要已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，并用 **Web 客户端**（`--profile web`）。装宿主包即可，Web 客户端会一并装上。
 
 ```bash
-dsh plugin --profile web add @undeadsheep/dsh-file-preview
+dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.1
 dsh web
 ```
 
 打开页面后，会话头部右上角应出现「文件预览」。点它即可打开悬浮窗。已在运行 `dsh web` 的，装完后重启一次。
 
+当前请钉死 `0.1.1`：DSH 用的 pnpm 对刚发布的包有约 24 小时门禁，不写版本号或用 `@latest` 可能仍装到 `0.1.0`。满一天后改回不带版本号的 `add` 即可。
+
 ### 更新
 
+已装过旧版的，钉版本并加 `--force`：
+
 ```bash
-dsh plugin --profile web add @undeadsheep/dsh-file-preview@latest --force
+dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.1 --force
 ```
 
-要固定版本，把 `@latest` 换成版本号（例如 `@0.2.0`）。改完同样重启 `dsh web`。
-
-想跟预发布：`add @undeadsheep/dsh-file-preview@next`。稳定用户不要用 `@next`。
+改完同样重启 `dsh web`。想跟预发布：`add @undeadsheep/dsh-file-preview@next`。稳定用户不要用 `@next`。
 
 ### 卸载
 
