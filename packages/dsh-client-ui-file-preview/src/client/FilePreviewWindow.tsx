@@ -574,7 +574,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
         bg={effectiveBg}
         fg={effectiveFg}
         fontSize={config.fontSize || 13}
-        fontFamily={config.fontFamily}
+        fontFamily={config.fontFamily || DEFAULT_CODE_FONT_FAMILY}
         dark={dark}
       />
     )
@@ -590,7 +590,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
         bg={effectiveBg}
         fg={effectiveFg}
         fontSize={config.fontSize || 13}
-        fontFamily={config.fontFamily}
+        fontFamily={config.fontFamily || DEFAULT_CODE_FONT_FAMILY}
         dark={dark}
       />
     )
@@ -635,7 +635,13 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   return (
     <div
       className={dark ? `${css.win} ${css.dark}` : css.win}
-      style={{ left: pos.x, top: pos.y, width: size.w, height: size.h }}
+      style={{
+        left: pos.x,
+        top: pos.y,
+        width: size.w,
+        height: size.h,
+        ['--fp-code-font' as string]: config.fontFamily || DEFAULT_CODE_FONT_FAMILY,
+      }}
       onKeyDown={handleKeyDown}
     >
       <div

@@ -18,7 +18,7 @@ export function ensureCodeFont(): void {
   if (document.querySelector(`style[data-plugin-font="${STYLE_TAG_ID}"]`) !== null) return
   const style = document.createElement('style')
   style.dataset.pluginFont = STYLE_TAG_ID
-  style.textContent = `@font-face{font-family:'${EMBEDDED_CODE_FONT}';src:url(${jetbrainsMonoRegularUrl}) format('woff2');font-weight:400;font-style:normal;font-display:swap}`
+  style.textContent = `@font-face{font-family:'${EMBEDDED_CODE_FONT}';src:url(${jetbrainsMonoRegularUrl}) format('woff2');font-weight:400;font-style:normal;font-display:block}`
   document.head.appendChild(style)
 }
 

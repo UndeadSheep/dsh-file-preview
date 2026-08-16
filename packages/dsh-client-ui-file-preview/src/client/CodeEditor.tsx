@@ -100,6 +100,7 @@ export function CodeEditor({
       lineNumbers(),
       history(),
       EditorState.readOnly.of(!editable),
+      EditorView.editable.of(editable),
       syntaxHighlighting(highlightStyleFor(colors, dark)),
       indentUnit.of('  '),
       EditorView.theme({
@@ -110,10 +111,15 @@ export function CodeEditor({
           color: fg ?? 'inherit',
           fontFamily,
         },
-        '.cm-content': { caretColor: fg ?? 'auto' },
-        '.cm-gutters': { backgroundColor: 'transparent', color: '#999', border: 'none' },
+        // Base theme sets `font-family: monospace` on `.cm-scroller`; override it here.
+        '.cm-scroller': { fontFamily },
+        '.cm-content': {
+          fontFamily,
+          caretColor: editable ? (fg ?? 'auto') : 'transparent',
+        },
+        '.cm-gutters': { fontFamily, backgroundColor: 'transparent', color: '#999', border: 'none' },
         '&.cm-focused': { outline: 'none' },
-        ...(editable ? {} : { '.cm-cursor': { display: 'none' } }),
+        ...(editable ? {} : { '.cm-cursor, .cm-dropCursor': { display: 'none' } }),
       }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) onChangeRef.current?.(update.state.doc.toString())
@@ -134,7 +140,7 @@ export function CodeEditor({
       view.destroy()
       viewRef.current = null
     }
-  }, [path, editable, colors, bg, fg, fontSize]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [path, editable, colors, bg, fg, fontSize, fontFamily, dark]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync externally-changed `value` (loading another file) into the view.
   useEffect(() => {
