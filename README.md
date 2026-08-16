@@ -33,6 +33,18 @@
       <br />点路径进预览，不唤系统打开
     </td>
   </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/SearchBar.gif" alt="顶部输入框搜索并打开工作区文件" />
+      <br /><strong>路径即搜</strong>
+      <br />顶部输入框模糊搜索工作区文件
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/Switch.gif" alt="标题栏切换浅色与深色模式" />
+      <br /><strong>一键亮暗</strong>
+      <br />标题栏切换浅色 / 深色
+    </td>
+  </tr>
 </table>
 
 ## 安装
