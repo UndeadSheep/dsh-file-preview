@@ -22,6 +22,7 @@ import css from './FilePreviewWindow.module.css'
 /** Module-level open store shared by the header button and the overlay window. */
 let mdOpen = false
 const openListeners = new Set<() => void>()
+const openFileListeners = new Set<(path: string) => void>()
 function setOpen(value: boolean): void {
   if (mdOpen === value) return
   mdOpen = value
@@ -30,6 +31,18 @@ function setOpen(value: boolean): void {
 function subscribeOpen(fn: () => void): () => void {
   openListeners.add(fn)
   return () => { openListeners.delete(fn) }
+}
+function subscribeOpenFile(fn: (path: string) => void): () => void {
+  openFileListeners.add(fn)
+  return () => { openFileListeners.delete(fn) }
+}
+/** Programmatic open (prose file mentions): reveal the window and load `path`. */
+export function requestOpenFile(path: string): void {
+  if (!mdOpen) {
+    mdOpen = true
+    for (const fn of openListeners) fn()
+  }
+  for (const fn of openFileListeners) fn(path)
 }
 
 /** Translate a structured business failure into user-facing text. */
@@ -233,6 +246,11 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
   const [config, setConfig] = useState<ConfigPayload>(DEFAULT_CONFIG)
   const editorPreRef = useRef<HTMLPreElement>(null)
   const savedSourceRef = useRef('')
+  const treeSignatureRef = useRef('')
+  const themeSignatureRef = useRef('')
+  const configSignatureRef = useRef('')
+  const treeInFlightRef = useRef<Promise<void> | null>(null)
+  const loadRef = useRef<(path: string) => void>(() => {})
 
   // Memoized markdown components: keep the `img`/`code` component identities stable across
   // re-renders (the file tree polls every 1.5s), so images aren't unmounted/remounted — which
@@ -256,6 +274,28 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     ),
   }), [remote, sessionId, baseDir, theme.colors])
 
+  // Memoize the rendered markdown so unrelated re-renders (window drag/resize,
+  // font-size tweaks, tree polls) don't re-run the remark/rehype parse of a
+  // large document on every render.
+  const markdownBody = useMemo<React.ReactNode>(() => {
+    if (file === null || !file.isMarkdown) return null
+    const size = `${config.fontSize || 13}px`
+    return (
+      <div className={css.scroll}>
+        <div className={css.meta}>{file.name}</div>
+        <div className={css.out} style={{ fontSize: size }}>
+          <Markdown
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+            components={markdownComponents}
+          >
+            {source}
+          </Markdown>
+        </div>
+      </div>
+    )
+  }, [file, source, config.fontSize, markdownComponents])
+
   useEffect(() => subscribeOpen(() => setOpenState(mdOpen)), [])
   useEffect(() => { if (open) reveal() }, [open])
   useEffect(() => { if (open && sessionId) void refreshTree() }, [open, sessionId])
@@ -267,6 +307,9 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     const id = setInterval(() => { void refreshTree() }, config.pollInterval || 1500)
     return () => clearInterval(id)
   }, [open, sessionId, config.pollInterval])
+  // Redirected file opens (file-mention links + tool rows) route here: open the
+  // window and load the clicked path through the latest `load` (current session).
+  useEffect(() => subscribeOpenFile((path) => { void loadRef.current(path) }), [])
 
   function reveal(): void {
     const vp = viewport()
@@ -276,22 +319,52 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     setPos({ x: Math.max(8, vp.w - w - 16), y: 16 })
   }
 
-  async function refreshTree(): Promise<void> {
-    if (!sessionId) return
-    const res = unwrap<FileTreeNode[]>(await remote.listTree({ sessionId }))
-    if (res.ok) setTree(res.value)
+  function refreshTree(): Promise<void> {
+    if (!sessionId) return Promise.resolve()
+    // Coalesce concurrent walks (open + poll + session change) into one request,
+    // and skip the state update when the tree hasn't changed so the 1.5s poll
+    // doesn't re-render the whole tree / re-parse an open markdown for nothing.
+    const inflight = treeInFlightRef.current
+    if (inflight !== null) return inflight
+    const task = (async () => {
+      try {
+        const res = unwrap<FileTreeNode[]>(await remote.listTree({ sessionId }))
+        if (res.ok) {
+          const signature = JSON.stringify(res.value)
+          if (signature !== treeSignatureRef.current) {
+            treeSignatureRef.current = signature
+            setTree(res.value)
+          }
+        }
+      } catch {
+        /* best-effort poll: keep the last known tree on transient errors */
+      }
+    })().finally(() => { treeInFlightRef.current = null })
+    treeInFlightRef.current = task
+    return task
   }
 
   async function loadTheme(): Promise<void> {
     if (!sessionId) return
     const res = unwrap<ThemePayload>(await remote.readTheme({ sessionId }))
-    if (res.ok) setTheme({ colors: res.value.colors, bg: res.value.bg ?? undefined, fg: res.value.fg ?? undefined })
+    if (!res.ok) return
+    const next = { colors: res.value.colors, bg: res.value.bg ?? undefined, fg: res.value.fg ?? undefined }
+    const signature = JSON.stringify(next)
+    if (signature !== themeSignatureRef.current) {
+      themeSignatureRef.current = signature
+      setTheme(next)
+    }
   }
 
   async function loadConfig(): Promise<void> {
     if (!sessionId) return
     const res = unwrap<ConfigPayload>(await remote.readConfig({ sessionId }))
-    if (res.ok) setConfig(res.value)
+    if (!res.ok) return
+    const signature = JSON.stringify(res.value)
+    if (signature !== configSignatureRef.current) {
+      configSignatureRef.current = signature
+      setConfig(res.value)
+    }
   }
 
   function refreshAll(): void {
@@ -319,6 +392,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
     }
     setLoading(false)
   }
+  loadRef.current = load
 
   async function save(): Promise<void> {
     if (file === null || !sessionId) return
@@ -442,20 +516,7 @@ export function FilePreviewWindow({ remote, useSessions }: FilePreviewWindowProp
       </div>
     )
   } else if (file.isMarkdown) {
-    body = (
-      <div className={css.scroll}>
-        <div className={css.meta}>{file.name}</div>
-        <div className={css.out} style={{ fontSize: fontSizePx }}>
-          <Markdown
-            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
-            components={markdownComponents}
-          >
-            {source}
-          </Markdown>
-        </div>
-      </div>
-    )
+    body = markdownBody
   } else {
     const lang = langFor(file.path)
     const plainHtml = lang ? highlight(source, lang, theme.colors) : escapeHtml(source)

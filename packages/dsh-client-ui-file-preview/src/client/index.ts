@@ -18,15 +18,51 @@ import type {} from '@undeadsheep/dsh-file-preview/remote'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { FilePreviewRemote } from './remote.ts'
-import { FilePreviewFab, FilePreviewWindow } from './FilePreviewWindow.tsx'
+import { FilePreviewFab, FilePreviewWindow, requestOpenFile } from './FilePreviewWindow.tsx'
 
 /** Required services: the slot registry and the gateway's `remote` mount face. */
 export const inject = ['slots', 'remote']
 
+/** Last path segment (slash- or backslash-separated). */
+function basenameOf(path: string): string {
+  const parts = path.split(/[/\\]/).filter(Boolean)
+  return parts[parts.length - 1] ?? path
+}
+
+/** Whether an OS-open target names a file (dotted segment) rather than a directory. */
+function isFileTarget(path: string): boolean {
+  const seg = basenameOf(path)
+  if (seg === '' || seg === '.' || seg === '..') return false
+  return seg.includes('.')
+}
+
 /**
- * Client plugin body: self-mount the `filePreview` Remote, then register the
- * floating window into `shell.overlay` and the toggle button into the session
- * header utilities.
+ * Route "open a file with the OS" (file-mention links and tool rows) into this
+ * preview window instead. Directory targets — e.g. the deliverables "show
+ * folder" action — keep opening with the OS default application.
+ * @returns a disposer restoring the original opener.
+ */
+function redirectFileOpens(ctx: ClientContext): () => void {
+  const workspaces = ctx.get('workspaces') as
+    | { openPath?: (path: string) => Promise<unknown> }
+    | undefined
+  const original = workspaces?.openPath
+  if (workspaces === undefined || original === undefined) return () => {}
+  const bound = original.bind(workspaces)
+  workspaces.openPath = (path: string) => {
+    if (isFileTarget(path)) {
+      requestOpenFile(path)
+      return Promise.resolve(undefined)
+    }
+    return bound(path)
+  }
+  return () => { workspaces.openPath = original }
+}
+
+/**
+ * Client plugin body: self-mount the `filePreview` Remote, register the floating
+ * window into `shell.overlay`, the toggle button into the session header, and
+ * redirect file opens into the preview.
  * @param ctx - client root context.
  */
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
@@ -36,6 +72,8 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   // `remote.filePreview` in `inject` — impossible here, since this very apply
   // creates it.
   const remote = ctx.get('remote.filePreview') as FilePreviewRemote
+
+  const disposeFileOpens = redirectFileOpens(ctx)
 
   const disposeOverlay = ctx.slots.inject('shell.overlay', () => {
     const dispose = ctx.slots.register({
@@ -58,6 +96,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   })
 
   return async () => {
+    disposeFileOpens()
     disposeOverlay()
     disposeFab()
     await disposeRemote()

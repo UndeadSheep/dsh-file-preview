@@ -52,6 +52,9 @@ const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_DEPTH = 12
 /** Stop descending once the tree has this many nodes, to bound worst-case walk cost. */
 const MAX_TREE_NODES = 5000
+/** Bound on concurrent subdirectory walks: the many `listDir` awaits would
+ *  otherwise serialize into one long chain on first open of a big workspace. */
+const WALK_CONCURRENCY = 8
 /** Directory names to skip while walking: heavy/noise trees that drown the sidebar. */
 const SKIP_DIRS = new Set([
   'node_modules', '.pnpm', '.pnpm-store', '.yarn', '.git', '.hg', '.svn',
@@ -130,19 +133,40 @@ export class FilePreviewService extends TypertRemoteService {
           : { type: 'other', name, path: childRel, size: entry.size })
       }
     }
-    for (const dir of dirs) {
-      if (budget.remaining <= 0) break
-      const children = depth > 0
-        ? await this.walk(dir.target, dir.childRel, depth - 1, budget).catch(() => [])
-        : []
-      nodes.push({ type: 'dir', name: dir.name, path: dir.childRel, children })
-    }
+    const dirNodes = await this.walkDirs(dirs, depth, budget)
+    nodes.push(...dirNodes)
     nodes.sort((a, b) => {
       if (a.type === 'dir' && b.type !== 'dir') return -1
       if (a.type !== 'dir' && b.type === 'dir') return 1
       return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
     })
     return nodes
+  }
+
+  /** Walk collected subdirectories with bounded concurrency, sharing the node budget. */
+  private async walkDirs(
+    dirs: Array<{ target: FsTarget; name: string; childRel: string }>,
+    depth: number,
+    budget: { remaining: number },
+  ): Promise<FileTreeNode[]> {
+    if (depth <= 0) {
+      return dirs.map((dir): FileTreeNode => ({ type: 'dir', name: dir.name, path: dir.childRel, children: [] }))
+    }
+    const results: Array<FileTreeNode | undefined> = new Array(dirs.length)
+    let next = 0
+    const worker = async (): Promise<void> => {
+      while (true) {
+        if (budget.remaining <= 0) return
+        const i = next++
+        if (i >= dirs.length) return
+        const dir = dirs[i]
+        if (dir === undefined) return
+        const children = await this.walk(dir.target, dir.childRel, depth - 1, budget).catch(() => [])
+        results[i] = { type: 'dir', name: dir.name, path: dir.childRel, children }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(WALK_CONCURRENCY, dirs.length) }, worker))
+    return results.filter((n): n is FileTreeNode => n !== undefined)
   }
 
   @Remote('listTree')
