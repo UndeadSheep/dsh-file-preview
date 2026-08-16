@@ -37,46 +37,51 @@
 
 ## 安装
 
-只需一条命令（pnpm 会自动把客户端依赖一起装上）：
+需要已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，并用 **Web 客户端**（`--profile web`）。装宿主包即可，Web 客户端会一并装上。
 
-```powershell
+```bash
 dsh plugin --profile web add @undeadsheep/dsh-file-preview
-```
-
-装完启动 / 重启 Web：
-
-```powershell
 dsh web
 ```
 
-打开页面后，点会话头部右上角的「文件预览」按钮，即可打开悬浮预览窗口。
+打开页面后，会话头部右上角应出现「文件预览」。点它即可打开悬浮窗。已在运行 `dsh web` 的，装完后重启一次。
 
-## 更新
+### 更新
 
-升级到最新版：重新执行安装命令即可（`latest` 标签始终指向最新发布版本）。
-
-```powershell
-dsh plugin --profile web add @undeadsheep/dsh-file-preview
+```bash
+dsh plugin --profile web add @undeadsheep/dsh-file-preview@latest --force
 ```
 
-更新后重启 `dsh web` 生效。
+要固定版本，把 `@latest` 换成版本号（例如 `@0.2.0`）。改完同样重启 `dsh web`。
 
-## 卸载
+想跟预发布：`add @undeadsheep/dsh-file-preview@next`。稳定用户不要用 `@next`。
 
-```powershell
+### 卸载
+
+```bash
 dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 ```
 
-移除后重启 `dsh web` 生效。
+重启 `dsh web` 后按钮消失。
+
+### 看不到按钮？
+
+1. 确认重启过 `dsh web`（热加载不会挂上新插件）。
+2. 确认加的是 `--profile web`，不要装进别的 profile。
+3. 若用了自定义 `DSH_HOME`，安装和启动必须指向同一目录。
 
 ## 功能
 
 - **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。
 - **文件树**：按需逐层加载——首开只列工作区顶层，展开目录才读下一层；自动跳过 `node_modules` / `.git` / `.next` 等重目录，大仓库也秒开。
-- **文本预览 + 编辑**：只读预览（代码带轻量语法高亮），切「编辑」可改文本并保存（`Ctrl+S`）。编辑态支持回车自动缩进、Tab 缩进、自动闭合引号/括号；撤销重做走浏览器原生 `Ctrl+Z` / `Ctrl+Y`。
-- **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览。
-- **图片懒加载 + 缓存**：md 里的本地图片滚动到视口附近（提前 200px）才读取；解析结果按字节预算缓存（16MB，淘汰最老），不重复请求、不闪烁。
-- **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔。详见[宿主包 README](packages/dsh-file-preview/README.md)。
+- **代码预览 + 编辑**：基于 **CodeMirror 6**（虚拟化渲染 + 增量解析），大文件流畅；切「编辑」可改文本并保存（`Ctrl+S`）。编辑态自带回车自动缩进、Tab 缩进、引号/括号自动闭合、撤销重做。
+- **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览；本地文件链接点击后在预览窗口内打开。
+- **图片预览**：单独打开 `png/jpg/gif/webp/svg` 等图片（≤5MB），支持滚轮缩放、拖拽平移、适应窗口。
+- **深色模式**：标题栏一键切换浅色 / 深色（One Dark 配色）。
+- **内嵌 JetBrains Mono**：代码预览/编辑默认使用内嵌字体，用户无需本地安装。
+- **Quick Open**：顶部输入框模糊搜索工作区文件（↑↓ 选择、命中高亮）、最近文件历史、清空按钮、内联错误提示。
+- **会话文件直达**：点击会话里提到的文件路径，直接打开预览。
+- **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔 / 字体。详见[宿主包 README](packages/dsh-file-preview/README.md)。
 
 ## 目录结构
 
@@ -130,7 +135,7 @@ pnpm dev
 
 ## 发布到 npm
 
-1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起改成同一个版本号（例如 `0.1.0-rc.3`）。
+1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起改成同一个版本号（例如 `0.1.1`）。
 2. 构建：`pnpm build`。
 3. 发布（**先客户端后宿主**，因为宿主依赖客户端）：
 
@@ -144,12 +149,21 @@ pnpm dev
    > 也是同样的转换）。发布后核对：
    >
    > ```powershell
-   > npm view @<YourNpmName>/dsh-file-preview dependencies
+   > npm view @undeadsheep/dsh-file-preview dependencies
    > ```
    >
    > 客户端依赖应是 `^<version>`，不能是 `workspace:^`。
-   >
-   > prerelease 也带 `--tag latest`（本插件尚未发过 stable，`latest` 即最新 rc）。
+
+**版本标签策略：**
+
+- **稳定版**（`0.1.0`、`0.1.1`…）→ `--tag latest`（普通用户 `add <包名>` 默认拿到）。
+- **预发布版**（`0.2.0-beta.1` 等）→ `--tag next`，**不要用 latest**：
+
+  ```powershell
+  pnpm publish --access public --tag next
+  ```
+
+  测试用户用 `add <包名>@next` 显式拉取，不影响普通用户的稳定版。
 
 ## 作者与许可
 
