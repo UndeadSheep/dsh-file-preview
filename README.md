@@ -6,19 +6,12 @@
 
 抱书女仆帮你偷瞄工作区 —— DeepSeek Harness 的「悬浮文件预览窗口」插件（宿主 Typert Remote 服务 + 浏览器客户端悬浮窗）。
 
-已发布到 npm（作用域 `@undeadsheep`）：
+## 界面截图
 
-- [`@undeadsheep/dsh-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-file-preview) — 组合包（bundle）+ 宿主服务
-- [`@undeadsheep/dsh-client-ui-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-client-ui-file-preview) — 客户端 UI
-
-## 功能
-
-- **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。
-- **文件树**：递归列出工作区（目录在前、文件在后），自动跳过 `node_modules` / `.git` / `.next` 等重目录，并有 5000 节点上限——大仓库也不卡。
-- **文本预览 + 编辑**：只读预览（代码带轻量语法高亮），切「编辑」可改文本并保存（`Ctrl+S`）。编辑态支持回车自动缩进、Tab 缩进、自动闭合引号/括号；撤销重做走浏览器原生 `Ctrl+Z` / `Ctrl+Y`。
-- **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览。
-- **图片懒加载 + 缓存**：md 里的本地图片滚动到视口附近（提前 200px）才读取；解析结果按字节预算缓存（16MB，淘汰最老），不重复请求、不闪烁。
-- **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔。详见[宿主包 README](packages/dsh-file-preview/README.md)。
+<p>
+  <img src="assets/sc.png" width="49%" alt="悬浮文件预览：Markdown 渲染" />
+  <img src="assets/sc1.png" width="49%" alt="悬浮文件预览：代码编辑" />
+</p>
 
 ## 安装
 
@@ -44,12 +37,20 @@ dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 
 移除后重启 `dsh web` 生效。
 
-## 界面截图
+已发布到 npm（作用域 `@undeadsheep`）：
 
-<p>
-  <img src="assets/sc.png" width="49%" alt="悬浮文件预览：Markdown 渲染" />
-  <img src="assets/sc1.png" width="49%" alt="悬浮文件预览：代码编辑" />
-</p>
+- [`@undeadsheep/dsh-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-file-preview) — 组合包（bundle）+ 宿主服务
+- [`@undeadsheep/dsh-client-ui-file-preview`](https://www.npmjs.com/package/@undeadsheep/dsh-client-ui-file-preview) — 客户端 UI
+
+## 功能
+
+- **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。
+- **文件树**：递归列出工作区（目录在前、文件在后），自动跳过 `node_modules` / `.git` / `.next` 等重目录，并有 5000 节点上限——大仓库也不卡。
+- **文本预览 + 编辑**：只读预览（代码带轻量语法高亮），切「编辑」可改文本并保存（`Ctrl+S`）。编辑态支持回车自动缩进、Tab 缩进、自动闭合引号/括号；撤销重做走浏览器原生 `Ctrl+Z` / `Ctrl+Y`。
+- **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览。
+- **图片懒加载 + 缓存**：md 里的本地图片滚动到视口附近（提前 200px）才读取；解析结果按字节预算缓存（16MB，淘汰最老），不重复请求、不闪烁。
+- **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔。详见[宿主包 README](packages/dsh-file-preview/README.md)。
+
 
 ## 目录结构
 
