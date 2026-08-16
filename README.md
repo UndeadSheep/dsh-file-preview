@@ -17,8 +17,8 @@
     </td>
     <td align="center" width="50%">
       <img src="assets/change.gif" alt="拉动边缘调整悬浮窗宽高" />
-      <br /><strong>拖改大小</strong>
-      <br />拉动边缘调整悬浮窗宽高
+      <br /><strong>可拖可改大小</strong>
+      <br />可拖拽移动，拉动边缘调整悬浮窗宽高
     </td>
   </tr>
   <tr>
