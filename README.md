@@ -1,5 +1,9 @@
 # file-peek 👀
 
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+[![npm](https://img.shields.io/npm/v/@undeadsheep/dsh-file-preview.svg)](https://www.npmjs.com/package/@undeadsheep/dsh-file-preview)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > 昵称 `file-peek` · 正式仓库/npm 名 `dsh-file-preview`
 
 ![file-peek 吉祥物：粉发女仆抱着一摞书快摔倒](assets/github-social-preview.png)
