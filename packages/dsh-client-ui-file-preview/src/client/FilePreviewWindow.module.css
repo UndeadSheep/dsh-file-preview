@@ -8,6 +8,7 @@
   border-radius: 12px;
   box-shadow: 0 18px 50px rgba(15, 20, 30, 0.28);
   overflow: hidden;
+  overscroll-behavior: contain;
   font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 13px;
   color: #1a1a1a;
@@ -27,8 +28,12 @@
 
 .title {
   flex: 1;
+  min-width: 0;
   font-weight: 600;
   letter-spacing: 0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sideBtn,
@@ -132,13 +137,41 @@
 .quickOpenItem mark { background: #ffe08a; color: inherit; }
 .quickOpenItemActive { background: #e8eeff; color: #2f56c9; }
 
+.quickOpenEmpty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #888;
+}
+
 .inlineError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 12px;
   color: #c0392b;
   font-size: 12px;
   background: #fdf0ee;
   border-top: 1px solid rgba(192, 57, 43, 0.15);
 }
+
+.inlineErrorText {
+  flex: 1;
+  min-width: 0;
+}
+
+.inlineErrorClose {
+  border: none;
+  background: transparent;
+  color: #c0392b;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+.inlineErrorClose:hover { opacity: 1; background: rgba(192, 57, 43, 0.12); }
 
 .btn {
   border: 1px solid rgba(0, 0, 0, 0.14);
@@ -190,6 +223,7 @@
 .sidebarList {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px 0;
 }
 
@@ -234,9 +268,19 @@
   font-size: 13px;
 }
 
+.mdBlockedImg {
+  display: inline-block;
+  padding: 2px 6px;
+  color: #888;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 .scroll {
   flex: 1;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 12px 14px;
   line-height: 1.6;
 }
@@ -355,6 +399,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .imageView {
@@ -362,6 +407,7 @@
   min-height: 0;
   position: relative;
   overflow: hidden;
+  overscroll-behavior: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -439,7 +485,17 @@
 
 .caret { width: 12px; flex-shrink: 0; color: #999; }
 .nodeIcon { width: 16px; flex-shrink: 0; text-align: center; }
-.nodeName { overflow: hidden; text-overflow: ellipsis; }
+.nodeName { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.nodeParent {
+  flex-shrink: 1;
+  margin-left: auto;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #999;
+}
 
 .resize {
   position: absolute;
@@ -516,6 +572,7 @@
 .dark .body { background: #282c34; }
 
 .dark .hint { color: #5c6370; }
+.dark .mdBlockedImg { color: #5c6370; background: rgba(255, 255, 255, 0.06); }
 .dark .meta { color: #5c6370; }
 
 .dark .actions {
@@ -545,6 +602,7 @@
 .dark .treeNode:hover { background: rgba(255, 255, 255, 0.06); }
 .dark .treeFileOn { background: #2c313a; color: #61afef; }
 .dark .caret { color: #5c6370; }
+.dark .nodeParent { color: #5c6370; }
 
 .dark .out a { color: #61afef; }
 .dark .out code { background: rgba(255, 255, 255, 0.1); }
@@ -561,4 +619,77 @@
 .dark .quickOpenItem { color: #abb2bf; }
 .dark .quickOpenItem mark { background: #5c4a1e; }
 .dark .quickOpenItemActive { background: #2c313a; color: #61afef; }
+.dark .quickOpenEmpty { color: #5c6370; }
 .dark .inlineError { color: #e06c75; background: #3a2626; border-top-color: rgba(224, 108, 117, 0.2); }
+.dark .inlineErrorClose { color: #e06c75; }
+
+.dialogMask {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 24, 32, 0.4);
+}
+
+.dialog {
+  width: min(280px, calc(100% - 32px));
+  padding: 16px 18px 14px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.dialogText {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  margin-bottom: 14px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialogCancel,
+.dialogOk {
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dialogCancel {
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fafafa;
+  color: #333;
+}
+
+.dialogCancel:hover { background: #f0f0f0; }
+
+.dialogOk {
+  border: 1px solid #c0392b;
+  background: #c0392b;
+  color: #ffffff;
+}
+
+.dialogOk:hover { background: #a93226; }
+
+.dark .dialogMask { background: rgba(0, 0, 0, 0.5); }
+.dark .dialog {
+  background: #21252b;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.dark .dialogText { color: #abb2bf; }
+.dark .dialogCancel {
+  background: #3e4451;
+  color: #abb2bf;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.dark .dialogCancel:hover { background: #4b5263; }
+.dark .dialogOk { background: #e06c75; border-color: #e06c75; }
+.dark .dialogOk:hover { background: #c85a64; }

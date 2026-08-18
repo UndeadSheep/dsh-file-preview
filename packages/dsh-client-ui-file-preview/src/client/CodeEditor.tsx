@@ -5,9 +5,9 @@
  * @module @undeadsheep/dsh-client-ui-file-preview/client/CodeEditor
  */
 
-import React, { useEffect, useRef } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
+import { EditorState, Transaction } from '@codemirror/state'
 import type { Extension } from '@codemirror/state'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -23,6 +23,10 @@ import { sql } from '@codemirror/lang-sql'
 import type { PreviewThemeColors } from '@undeadsheep/dsh-file-preview/types'
 import { DEFAULT_COLORS } from './render.ts'
 import cssModule from './FilePreviewWindow.module.css'
+
+export interface CodeEditorHandle {
+  getValue: () => string | undefined
+}
 
 export interface CodeEditorProps {
   value: string
@@ -74,7 +78,7 @@ function highlightStyleFor(colors: PreviewThemeColors, dark: boolean): Highlight
   ])
 }
 
-export function CodeEditor({
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor({
   value,
   path,
   editable,
@@ -85,11 +89,15 @@ export function CodeEditor({
   fontSize,
   fontFamily,
   dark,
-}: CodeEditorProps): React.ReactElement {
+}, ref): React.ReactElement {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+
+  useImperativeHandle(ref, () => ({
+    getValue: () => viewRef.current?.state.doc.toString(),
+  }), [])
 
   // (Re)create the view when the static config changes. `value` is deliberately
   // NOT a dep — otherwise typing would recreate the editor on every keystroke.
@@ -122,13 +130,21 @@ export function CodeEditor({
         ...(editable ? {} : { '.cm-cursor, .cm-dropCursor': { display: 'none' } }),
       }),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) onChangeRef.current?.(update.state.doc.toString())
+        if (!update.docChanged) return
+        // Ignore programmatic setValue (opening another file) so it does not
+        // look like a user edit.
+        if (update.transactions.every(tr => tr.annotation(Transaction.remote))) return
+        onChangeRef.current?.(update.state.doc.toString())
       }),
     ]
     const lang = languageFor(path)
     if (lang) extensions.push(lang)
     if (editable) {
-      extensions.push(keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]))
+      extensions.push(keymap.of([
+        { key: 'Mod-s', run: () => true },
+        { key: 'Mod-p', run: () => true },
+        ...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab,
+      ]))
       extensions.push(closeBrackets())
     }
     const view = new EditorView({
@@ -148,9 +164,12 @@ export function CodeEditor({
     if (!view) return
     const current = view.state.doc.toString()
     if (current !== value) {
-      view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
+      view.dispatch({
+        changes: { from: 0, to: current.length, insert: value },
+        annotations: Transaction.remote.of(true),
+      })
     }
   }, [value])
 
   return <div ref={hostRef} className={cssModule.codeEditor} />
-}
+})

@@ -1,15 +1,19 @@
 /**
- * Recently-opened file paths, persisted in localStorage. Used by the quick-open
- * input to show "recent files" when the query is empty.
+ * Recently-opened file paths, persisted in localStorage per session so switching
+ * workspaces does not surface another project's files.
  * @module @undeadsheep/dsh-client-ui-file-preview/client/recent
  */
 
-const KEY = 'file-preview-recent-files'
 const MAX = 20
 
-export function loadRecent(): string[] {
+function storageKey(sessionId: string): string {
+  return `file-preview-recent-files:${sessionId}`
+}
+
+export function loadRecent(sessionId: string | undefined): string[] {
+  if (!sessionId) return []
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(storageKey(sessionId))
     if (!raw) return []
     const arr: unknown = JSON.parse(raw)
     return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []
@@ -18,10 +22,11 @@ export function loadRecent(): string[] {
   }
 }
 
-export function recordRecent(path: string): void {
+export function recordRecent(sessionId: string | undefined, path: string): void {
+  if (!sessionId) return
   try {
-    const list = loadRecent().filter(p => p !== path)
+    const list = loadRecent(sessionId).filter(p => p !== path)
     list.unshift(path)
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)))
+    localStorage.setItem(storageKey(sessionId), JSON.stringify(list.slice(0, MAX)))
   } catch { /* ignore storage errors */ }
 }

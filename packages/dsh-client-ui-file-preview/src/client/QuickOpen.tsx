@@ -4,10 +4,11 @@
  * @module @undeadsheep/dsh-client-ui-file-preview/client/QuickOpen
  */
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { forwardRef, useEffect, useRef, useState } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { FilePreviewRemote } from './remote.ts'
 import { loadRecent } from './recent.ts'
+import { normalizeWorkspacePath } from './paths.ts'
 import css from './FilePreviewWindow.module.css'
 
 export interface QuickOpenProps {
@@ -37,22 +38,38 @@ function highlightMatch(path: string, query: string): React.ReactNode {
   return nodes
 }
 
-export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.ReactElement {
+export const QuickOpen = forwardRef<HTMLInputElement, QuickOpenProps>(function QuickOpen(
+  { sessionId, remote, onOpen },
+  ref,
+): React.ReactElement {
   const [value, setValue] = useState('')
   const [items, setItems] = useState<string[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
   const [open, setOpen] = useState(false)
-  const [recent, setRecent] = useState<string[]>(() => loadRecent())
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [recent, setRecent] = useState<string[]>(() => loadRecent(sessionId === undefined ? undefined : String(sessionId)))
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const focusedRef = useRef(false)
 
+  function setInputRef(el: HTMLInputElement | null): void {
+    inputRef.current = el
+    if (typeof ref === 'function') ref(el)
+    else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = el
+  }
+
   function openPath(path: string): void {
+    const normalized = normalizeWorkspacePath(path)
     setValue('')
     setItems([])
     setOpen(false)
-    onOpen(path)
+    onOpen(normalized ?? path)
   }
+
+  useEffect(() => {
+    const r = loadRecent(sessionId === undefined ? undefined : String(sessionId))
+    setRecent(r)
+    if (value.trim() === '') setItems(r)
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search (or recent files when the query is empty).
   // Only updates the candidate list — dropdown visibility is driven by focus / click-outside.
@@ -71,7 +88,6 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
       const matches = res.ok && res.value.ok ? res.value.value : []
       setItems(matches)
       setActiveIndex(matches.length > 0 ? 0 : -1)
-      if (focusedRef.current) setOpen(matches.length > 0)
     }, 150)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [value, sessionId, remote, recent])
@@ -109,21 +125,29 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
         if (raw !== '') openPath(raw)
       }
     } else if (e.key === 'Escape') {
-      setOpen(false)
+      if (open) {
+        e.preventDefault()
+        e.stopPropagation()
+        setOpen(false)
+      }
     }
   }
 
   function clear(): void {
+    const r = loadRecent(sessionId === undefined ? undefined : String(sessionId))
+    setRecent(r)
     setValue('')
-    setItems(loadRecent())
+    setItems(r)
     setOpen(true)
     inputRef.current?.focus()
   }
 
+  const emptyHint = value.trim() === '' ? '暂无最近打开的文件' : '没有匹配的文件'
+
   return (
     <div className={css.quickOpen} ref={wrapRef}>
       <input
-        ref={inputRef}
+        ref={setInputRef}
         className={css.input}
         value={value}
         placeholder="输入文件路径 / 搜索文件"
@@ -134,7 +158,7 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
         onKeyDown={onKeyDown}
         onFocus={() => {
           focusedRef.current = true
-          const r = loadRecent()
+          const r = loadRecent(sessionId === undefined ? undefined : String(sessionId))
           setRecent(r)
           if (value.trim() === '') setItems(r)
           setOpen(true)
@@ -147,20 +171,22 @@ export function QuickOpen({ sessionId, remote, onOpen }: QuickOpenProps): React.
       {value !== '' && (
         <button type="button" className={css.clearBtn} title="清空" onMouseDown={e => { e.preventDefault(); clear() }}>×</button>
       )}
-      {open && items.length > 0 && (
+      {open && (
         <div className={css.quickOpenList}>
-          {items.map((item, i) => (
-            <div
-              key={item}
-              className={i === activeIndex ? `${css.quickOpenItem} ${css.quickOpenItemActive}` : css.quickOpenItem}
-              onMouseDown={e => { e.preventDefault(); openPath(item) }}
-              onMouseEnter={() => setActiveIndex(i)}
-            >
-              {value.trim() === '' ? item : highlightMatch(item, value.trim())}
-            </div>
-          ))}
+          {items.length === 0
+            ? <div className={css.quickOpenEmpty}>{emptyHint}</div>
+            : items.map((item, i) => (
+              <div
+                key={item}
+                className={i === activeIndex ? `${css.quickOpenItem} ${css.quickOpenItemActive}` : css.quickOpenItem}
+                onMouseDown={e => { e.preventDefault(); openPath(item) }}
+                onMouseEnter={() => setActiveIndex(i)}
+              >
+                {value.trim() === '' ? item : highlightMatch(item, value.trim())}
+              </div>
+            ))}
         </div>
       )}
     </div>
   )
-}
+})

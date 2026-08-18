@@ -77,9 +77,19 @@ export function ImageView({ url, name }: ImageViewProps): React.ReactElement {
     setPan({ x: 0, y: 0 })
   }
 
-  function onWheel(e: React.WheelEvent): void {
-    setScale(s => clampScale(s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)))
-  }
+  // Native wheel: React's onWheel is passive, so preventDefault would not stick
+  // and the page behind the overlay would keep scrolling.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      setScale(s => clampScale(s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   function onPointerDown(e: React.PointerEvent): void {
     if (scale <= fitScale) return
@@ -101,7 +111,6 @@ export function ImageView({ url, name }: ImageViewProps): React.ReactElement {
     <div
       ref={containerRef}
       className={cssModule.imageView}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

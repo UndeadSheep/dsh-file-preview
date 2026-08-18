@@ -72,7 +72,13 @@ export function isMdPath(path: string): boolean {
 
 export function isImagePath(path: string): boolean {
   const lower = path.toLowerCase()
-  return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(lower)
+  return /\.(png|jpe?g|gif|webp)$/.test(lower)
+}
+
+const HEX_COLOR = /^#[0-9A-Fa-f]{3,8}$/
+
+function safeColor(value: string | undefined): string | undefined {
+  return value !== undefined && HEX_COLOR.test(value) ? value : undefined
 }
 
 type TokenKind = 'keyword' | 'string' | 'number' | 'comment' | 'tag' | 'function' | 'type' | 'variable'
@@ -80,7 +86,16 @@ type TokenKind = 'keyword' | 'string' | 'number' | 'comment' | 'tag' | 'function
 export function highlight(code: string, lang: string | null, colors: PreviewThemeColors = {}): string {
   const xml = lang === 'xml'
   const keywords = keywordsFor(lang)
-  const palette = { ...DEFAULT_COLORS, ...colors }
+  const palette: Required<PreviewThemeColors> = {
+    keyword: safeColor(colors.keyword) ?? DEFAULT_COLORS.keyword,
+    string: safeColor(colors.string) ?? DEFAULT_COLORS.string,
+    number: safeColor(colors.number) ?? DEFAULT_COLORS.number,
+    comment: safeColor(colors.comment) ?? DEFAULT_COLORS.comment,
+    tag: safeColor(colors.tag) ?? DEFAULT_COLORS.tag,
+    function: safeColor(colors.function) ?? DEFAULT_COLORS.function,
+    type: safeColor(colors.type) ?? DEFAULT_COLORS.type,
+    variable: safeColor(colors.variable) ?? DEFAULT_COLORS.variable,
+  }
   const out: string[] = []
   let i = 0
   const n = code.length

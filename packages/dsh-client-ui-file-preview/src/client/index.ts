@@ -19,23 +19,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { FilePreviewRemote } from './remote.ts'
 import { FilePreviewFab, FilePreviewWindow, requestOpenFile } from './FilePreviewWindow.tsx'
+import { isFileTarget } from './paths.ts'
 import { ensureCodeFont } from './font.ts'
 
 /** Required services: the slot registry and the gateway's `remote` mount face. */
 export const inject = ['slots', 'remote']
-
-/** Last path segment (slash- or backslash-separated). */
-function basenameOf(path: string): string {
-  const parts = path.split(/[/\\]/).filter(Boolean)
-  return parts[parts.length - 1] ?? path
-}
-
-/** Whether an OS-open target names a file (dotted segment) rather than a directory. */
-function isFileTarget(path: string): boolean {
-  const seg = basenameOf(path)
-  if (seg === '' || seg === '.' || seg === '..') return false
-  return seg.includes('.')
-}
 
 /**
  * Route "open a file with the OS" (file-mention links and tool rows) into this
