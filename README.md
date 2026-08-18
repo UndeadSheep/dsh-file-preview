@@ -29,7 +29,7 @@
     <td align="center" width="50%">
       <img src="assets/write.gif" alt="在悬浮窗里编辑并保存文件" />
       <br /><strong>预览也能改</strong>
-      <br />切编辑，保存写回工作区
+      <br />打开即可改，保存写回工作区
     </td>
     <td align="center" width="50%">
       <img src="assets/clickOpen.gif" alt="点会话里的文件路径打开预览" />
@@ -56,20 +56,20 @@
 需要已安装 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，并用 **Web 客户端**（`--profile web`）。装宿主包即可，Web 客户端会一并装上。
 
 ```bash
-dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.1
+dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.2
 dsh web
 ```
 
 打开页面后，会话头部右上角应出现「文件预览」。点它即可打开悬浮窗。已在运行 `dsh web` 的，装完后重启一次。
 
-当前请钉死 `0.1.1`：DSH 用的 pnpm 对刚发布的包有约 24 小时门禁，不写版本号或用 `@latest` 可能仍装到 `0.1.0`。满一天后改回不带版本号的 `add` 即可。
+当前请钉死 `0.1.2`：DSH 用的 pnpm 对刚发布的包有约 24 小时门禁，不写版本号或用 `@latest` 可能仍装到旧版。满一天后改回不带版本号的 `add` 即可。
 
 ### 更新
 
 已装过旧版的，钉版本并加 `--force`：
 
 ```bash
-dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.1 --force
+dsh plugin --profile web add @undeadsheep/dsh-file-preview@0.1.2 --force
 ```
 
 改完同样重启 `dsh web`。想跟预发布：`add @undeadsheep/dsh-file-preview@next`。稳定用户不要用 `@next`。
@@ -90,15 +90,15 @@ dsh plugin --profile web remove @undeadsheep/dsh-file-preview
 
 ## 功能
 
-- **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。
-- **文件树**：按需逐层加载——首开只列工作区顶层，展开目录才读下一层；自动跳过 `node_modules` / `.git` / `.next` 等重目录，大仓库也秒开。
-- **代码预览 + 编辑**：基于 **CodeMirror 6**（虚拟化渲染 + 增量解析），大文件流畅；切「编辑」可改文本并保存（`Ctrl+S`）。编辑态自带回车自动缩进、Tab 缩进、引号/括号自动闭合、撤销重做。
-- **Markdown 渲染**：`react-markdown` + GFM（表格 / 任务列表 / 删除线），原生 HTML 经 `rehype-sanitize` 白名单过滤；本地相对路径图片自动内联预览；本地文件链接点击后在预览窗口内打开。
-- **图片预览**：单独打开 `png/jpg/gif/webp/svg` 等图片（≤5MB），支持滚轮缩放、拖拽平移、适应窗口。
+- **悬浮预览窗口**：会话头部按钮唤出，可拖动、调大小、折叠侧边栏。收起后记住位置、大小和未保存内容。标题显示文件名，有未保存修改时加 `*`。
+- **文件树**：按需逐层加载——首开只列工作区顶层，展开目录才读下一层；打开文件会自动展开父目录并滚到当前项。自动跳过 `node_modules` / `.git` / `.next` / `.ssh` 等重目录，以及 `.env*` / `id_rsa*` / `*.pem` 等敏感文件。敏感路径既不出现在树和 Quick Open 里，也无法手动打开。
+- **代码编辑**：基于 **CodeMirror 6**（虚拟化渲染 + 增量解析），打开即可改，大文件流畅。`Ctrl+S` 保存（保存前会写入编辑器里最后几下）。只改了换行符不会当成未保存；真改了再切文件，会出窗内确认，而不是系统弹窗。`Esc` 收起窗口，`Ctrl+P` 聚焦搜索。编辑态自带回车自动缩进、Tab 缩进、引号/括号自动闭合、撤销重做。
+- **Markdown**：底部「预览 / 编辑」切换。`react-markdown` + GFM（表格 / 任务列表 / 删除线）；不解析原生 HTML，输出再经 `rehype-sanitize` 过滤。本地相对路径图片自动内联预览；`http(s)` / `data:` / `javascript:` 图和链接一律不加载。本地文件链接点击后在预览窗口内打开。
+- **图片预览**：单独打开 `png/jpg/gif/webp`（≤5MB），支持滚轮缩放、拖拽平移、适应窗口；滚轮不会带动后面会话页面。`.svg` 按文本打开，不当图片渲染。
 - **深色模式**：标题栏一键切换浅色 / 深色（One Dark 配色）。
 - **内嵌 JetBrains Mono**：代码预览/编辑默认使用内嵌字体，用户无需本地安装。
-- **Quick Open**：顶部输入框模糊搜索工作区文件（↑↓ 选择、命中高亮）、最近文件历史、清空按钮、内联错误提示。
-- **会话文件直达**：点击会话里提到的文件路径，直接打开预览。
+- **Quick Open**：顶部输入框模糊搜索工作区文件（↑↓ 选择、命中高亮）。没结果会提示「没有匹配的文件」；最近打开按会话隔离，换工作区不会冒出上一份的路径。
+- **会话文件直达**：点击会话里提到的文件路径，直接打开预览（`Makefile` / `Dockerfile` / `LICENSE` 等无扩展名也会进预览；目录仍走系统打开）。
 - **主题与配置**：工作区根目录放 `preview-theme.json` 自定义 8 种高亮色 + 背景/前景（缺省回退 `.vscode/settings.json`，再回退内置默认）；`preview.config.json` 可配缩进 / 字号 / 轮询间隔 / 字体。详见[宿主包 README](packages/dsh-file-preview/README.md)。
 
 ## 目录结构
@@ -153,7 +153,7 @@ pnpm dev
 
 ## 发布到 npm
 
-1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起改成同一个版本号（例如 `0.1.1`）。
+1. bump 版本：两个 `packages/*/package.json` 的 `version` 一起改成同一个版本号（例如 `0.1.2`）。
 2. 构建：`pnpm build`。
 3. 发布（**先客户端后宿主**，因为宿主依赖客户端）：
 
