@@ -1,6 +1,6 @@
 {
   "name": "@undeadsheep/dsh-client-ui-file-preview",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Floating workspace file-preview window for the DeepSeek Harness web client",
   "author": "UndeadSheep",
   "type": "module",
@@ -47,7 +47,6 @@
     "@codemirror/view": "^6.26.3",
     "@lezer/highlight": "^1.2.0",
     "react-markdown": "^10.1.0",
-    "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1"
   },
