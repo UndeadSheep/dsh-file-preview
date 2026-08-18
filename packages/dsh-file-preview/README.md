@@ -24,15 +24,18 @@ Wire codecs are generated from the `@Remote` method types by typert codegen — 
 no hand-written schema file.
 
 `listDir` lists a single directory (`path` = `''` for the workspace root) and skips
-heavy/noise directories (`node_modules`, `.git`, `.next`, …); dir nodes carry empty
-`children`, which the browser half fills lazily by calling `listDir` again when a
-directory is expanded.
+heavy/noise directories (`node_modules`, `.git`, `.next`, `.ssh`, …) plus sensitive
+filenames (`.env*`, `id_rsa*`, `*.pem`, `*.key`, …). A single listing is capped at
+1000 children. Dir nodes carry empty `children`, which the browser half fills lazily
+by calling `listDir` again when a directory is expanded. `readFile` / `readImage` /
+`writeFile` also refuse those sensitive paths, so typing them in Quick Open does not
+bypass the tree filter.
 
 ## Config
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `maxFileBytes` | 2097152 | Maximum UTF-8 byte length the preview will read |
+| `maxFileBytes` | 2097152 | Maximum UTF-8 byte length the preview will read **or write** |
 | `maxImageBytes` | 5242880 | Maximum byte length of an inline image the preview will read |
 
 ## Workspace config files (read per Session, optional)
@@ -46,7 +49,14 @@ directory is expanded.
 
 ## Known limitations
 
-- Preview is text-only; binary or oversized files return `not-text` / `too-large`.
+- Preview is text-only (plus raster `png`/`jpeg`/`gif`/`webp`); binary, SVG-as-image,
+  or oversized files return `not-text` / `too-large`. A `stat` with no `size` is
+  refused rather than reading the whole file into memory. Writes use the same byte cap
+  as text reads.
+- `listDir` returns at most 1000 children per directory.
+- Symlink following after `resolve` is the host `ctx.fs` implementation's
+  responsibility; this plugin re-resolves search children against `workspaceRoot` but
+  cannot `realpath` on its own.
 - Syntax highlighting is a lightweight hand-written tokenizer (not highlight.js /
   TextMate), and a prettier engine cannot be embedded.
-- Auto-refresh is polling (`pollInterval`), not a real file watcher.
+- Auto-refresh is polling (`pollInterval`, clamped 500–60000 ms), not a real file watcher.

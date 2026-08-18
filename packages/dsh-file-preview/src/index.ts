@@ -12,6 +12,17 @@ import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the `ctx.sandboxPolicy` Context augmentation.
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import {
+  clampPollInterval,
+  isSensitiveName,
+  isSensitivePath,
+  LIST_DIR_MAX_CHILDREN,
+  MAX_CONFIG_BYTES,
+  basenameOf,
+  isSkippedDirName,
+  sanitizeFontFamily,
+  sanitizeHexColor,
+} from './gates.ts'
 import type {
   ConfigPayload,
   FileTreeNode,
@@ -57,24 +68,16 @@ const DEFAULT_FONT_FAMILY = "'JetBrains Mono', ui-monospace, 'Cascadia Code', Co
 const SEARCH_NODE_BUDGET = 8000
 /** Max matched paths returned per search. */
 const SEARCH_RESULT_LIMIT = 20
-/** Directory names to skip while listing: heavy/noise trees that drown the sidebar. */
-const SKIP_DIRS = new Set([
-  'node_modules', '.pnpm', '.pnpm-store', '.yarn', '.git', '.hg', '.svn',
-  '.next', '.nuxt', '.cache', '.parcel-cache', '.turbo',
-  '.venv', 'venv', '__pycache__', '.idea', '.vscode',
-])
+const THEME_COLOR_KEYS = ['keyword', 'string', 'number', 'comment', 'tag', 'function', 'type', 'variable'] as const
 
-/** Map an image path extension to a browser-safe MIME type. */
-function mimeFor(path: string): string {
+/** Map an image path extension to a browser-safe raster MIME type. */
+function mimeFor(path: string): string | undefined {
   const lower = path.toLowerCase()
   if (lower.endsWith('.png')) return 'image/png'
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
   if (lower.endsWith('.gif')) return 'image/gif'
   if (lower.endsWith('.webp')) return 'image/webp'
-  if (lower.endsWith('.svg')) return 'image/svg+xml'
-  if (lower.endsWith('.bmp')) return 'image/bmp'
-  if (lower.endsWith('.ico')) return 'image/x-icon'
-  return 'application/octet-stream'
+  return undefined
 }
 
 /** True when `query` appears as a case-insensitive subsequence of `text`. */
@@ -122,32 +125,39 @@ export class FilePreviewService extends TypertRemoteService {
     return this.ctx.sandboxPolicy.resolve()
   }
 
+  /** Read a small JSON object after a size-bounded stat; missing/oversize files yield null. */
+  private async readJsonBounded(path: string, cwd: string): Promise<Record<string, unknown> | null> {
+    const target = await this.ctx.fs.resolve(path, { cwd })
+    const info = await this.ctx.fs.stat(target)
+    if (!info || info.type !== 'file' || info.size === undefined || info.size > MAX_CONFIG_BYTES) return null
+    const parsed: unknown = JSON.parse(await this.ctx.fs.readText(target))
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed as Record<string, unknown>
+  }
+
   /** List one directory (single level) into the wire tree shape (directories first). */
   @Remote('listDir')
   async listDir(request: ListDirRequest): Promise<ListDirResult> {
     try {
       const policy = this.policyFor(request.sessionId)
       const path = request.path === '.' ? '' : request.path
+      if (path !== '' && isSensitivePath(path)) return { ok: true, value: [] }
       const target = path === ''
         ? await this.ctx.fs.resolve(policy.workspaceRoot, {})
         : await this.ctx.fs.resolve(path, { cwd: policy.workspaceRoot })
       const entries = await this.ctx.fs.listDir(target)
       const nodes: FileTreeNode[] = []
       for (const entry of entries) {
-        const name = entry.name
+        const name = basenameOf(entry.name) || entry.name
         if (!name) continue
+        if (isSkippedDirName(name) || isSensitiveName(name)) continue
         const childRel = path ? `${path}/${name}` : name
         if (entry.type === 'directory') {
-          if (SKIP_DIRS.has(name)) continue
           nodes.push({ type: 'dir', name, path: childRel, children: [] })
-        } else if (entry.type === 'file') {
+        } else {
           nodes.push(entry.size === undefined
             ? { type: 'file', name, path: childRel }
             : { type: 'file', name, path: childRel, size: entry.size })
-        } else {
-          nodes.push(entry.size === undefined
-            ? { type: 'other', name, path: childRel }
-            : { type: 'other', name, path: childRel, size: entry.size })
         }
       }
       nodes.sort((a, b) => {
@@ -155,7 +165,7 @@ export class FilePreviewService extends TypertRemoteService {
         if (a.type !== 'dir' && b.type === 'dir') return 1
         return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
       })
-      return { ok: true, value: nodes }
+      return { ok: true, value: nodes.slice(0, LIST_DIR_MAX_CHILDREN) }
     } catch (error) {
       return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
     }
@@ -165,27 +175,33 @@ export class FilePreviewService extends TypertRemoteService {
   private async collectFiles(
     target: FsTarget,
     rel: string,
+    cwd: string,
     budget: { remaining: number },
     paths: string[],
   ): Promise<void> {
     const entries = await this.ctx.fs.listDir(target)
-    const dirs: Array<{ target: FsTarget; childRel: string }> = []
+    const dirs: Array<{ childRel: string }> = []
     for (const entry of entries) {
       if (budget.remaining <= 0) return
       budget.remaining--
-      const name = entry.name
+      const name = basenameOf(entry.name) || entry.name
       if (!name) continue
+      if (isSkippedDirName(name) || isSensitiveName(name)) continue
       const childRel = rel ? `${rel}/${name}` : name
       if (entry.type === 'directory') {
-        if (SKIP_DIRS.has(name)) continue
-        dirs.push({ target: entry.target, childRel })
-      } else if (entry.type === 'file') {
+        dirs.push({ childRel })
+      } else {
         paths.push(childRel)
       }
     }
     for (const dir of dirs) {
       if (budget.remaining <= 0) return
-      await this.collectFiles(dir.target, dir.childRel, budget, paths).catch(() => {})
+      try {
+        const childTarget = await this.ctx.fs.resolve(dir.childRel, { cwd })
+        await this.collectFiles(childTarget, dir.childRel, cwd, budget, paths)
+      } catch {
+        /* skip unreadable / out-of-sandbox children */
+      }
     }
   }
 
@@ -197,7 +213,7 @@ export class FilePreviewService extends TypertRemoteService {
       if (query === '') return { ok: true, value: [] }
       const root = await this.ctx.fs.resolve(policy.workspaceRoot, {})
       const paths: string[] = []
-      await this.collectFiles(root, '', { remaining: SEARCH_NODE_BUDGET }, paths)
+      await this.collectFiles(root, '', policy.workspaceRoot, { remaining: SEARCH_NODE_BUDGET }, paths)
       const matches = paths
         .filter(path => fuzzyMatch(path.toLowerCase(), query))
         .sort((a, b) => scorePath(a.toLowerCase(), query) - scorePath(b.toLowerCase(), query))
@@ -211,12 +227,16 @@ export class FilePreviewService extends TypertRemoteService {
   @Remote('readFile')
   async readFile(request: ReadFileRequest): Promise<ReadFileResult> {
     try {
+      if (isSensitivePath(request.path)) return { ok: false, error: { code: 'not-found', path: request.path } }
       const policy = this.policyFor(request.sessionId)
       const target = await this.ctx.fs.resolve(request.path, { cwd: policy.workspaceRoot })
       const info = await this.ctx.fs.stat(target)
       if (!info) return { ok: false, error: { code: 'not-found', path: request.path } }
-      if (info.type !== 'file') return { ok: false, error: { code: 'not-text', path: request.path } }
-      if (info.size !== undefined && info.size > this.maxFileBytes) {
+      if (info.type === 'directory') return { ok: false, error: { code: 'not-text', path: request.path } }
+      if (info.size === undefined) {
+        return { ok: false, error: { code: 'io-failure', message: 'file size unavailable' } }
+      }
+      if (info.size > this.maxFileBytes) {
         return { ok: false, error: { code: 'too-large', path: request.path, maxBytes: this.maxFileBytes, size: info.size } }
       }
       const content = await this.ctx.fs.readText(target)
@@ -232,17 +252,23 @@ export class FilePreviewService extends TypertRemoteService {
   @Remote('readImage')
   async readImage(request: ReadImageRequest): Promise<ReadImageResult> {
     try {
+      if (isSensitivePath(request.path)) return { ok: false, error: { code: 'not-found', path: request.path } }
+      const mimeType = mimeFor(request.path)
+      if (mimeType === undefined) return { ok: false, error: { code: 'not-text', path: request.path } }
       const policy = this.policyFor(request.sessionId)
       const target = await this.ctx.fs.resolve(request.path, { cwd: policy.workspaceRoot })
       const info = await this.ctx.fs.stat(target)
       if (!info) return { ok: false, error: { code: 'not-found', path: request.path } }
-      if (info.type !== 'file') return { ok: false, error: { code: 'not-text', path: request.path } }
-      if (info.size !== undefined && info.size > this.maxImageBytes) {
+      if (info.type === 'directory') return { ok: false, error: { code: 'not-text', path: request.path } }
+      if (info.size === undefined) {
+        return { ok: false, error: { code: 'io-failure', message: 'file size unavailable' } }
+      }
+      if (info.size > this.maxImageBytes) {
         return { ok: false, error: { code: 'too-large', path: request.path, maxBytes: this.maxImageBytes, size: info.size } }
       }
       const bytes = await this.ctx.fs.readBytes(target, undefined, this.maxImageBytes)
       const data = Buffer.from(bytes).toString('base64')
-      const value: ImagePayload = { path: request.path, mimeType: mimeFor(request.path), data }
+      const value: ImagePayload = { path: request.path, mimeType, data }
       return { ok: true, value }
     } catch (error) {
       return { ok: false, error: { code: 'io-failure', message: error instanceof Error ? error.message : String(error) } }
@@ -252,6 +278,10 @@ export class FilePreviewService extends TypertRemoteService {
   @Remote('writeFile')
   async writeFile(request: WriteFileRequest): Promise<WriteFileResult> {
     try {
+      if (isSensitivePath(request.path)) return { ok: false, error: { code: 'write-denied', path: request.path } }
+      if (Buffer.byteLength(request.content, 'utf8') > this.maxFileBytes) {
+        return { ok: false, error: { code: 'write-denied', path: request.path } }
+      }
       const policy = this.policyFor(request.sessionId)
       const target = await this.ctx.fs.resolve(request.path, { cwd: policy.workspaceRoot })
       await this.ctx.fs.writeText(target, request.content, undefined, undefined, policy)
@@ -269,29 +299,41 @@ export class FilePreviewService extends TypertRemoteService {
     let fg: string | null = null
 
     try {
-      const target = await this.ctx.fs.resolve('preview-theme.json', { cwd: policy.workspaceRoot })
-      const parsed = JSON.parse(await this.ctx.fs.readText(target)) as Record<string, unknown>
-      for (const key of ['keyword', 'string', 'number', 'comment', 'tag', 'function', 'type', 'variable'] as const) {
-        if (typeof parsed[key] === 'string') colors[key] = parsed[key] as string
+      const parsed = await this.readJsonBounded('preview-theme.json', policy.workspaceRoot)
+      if (parsed) {
+        for (const key of THEME_COLOR_KEYS) {
+          if (typeof parsed[key] === 'string') {
+            const hex = sanitizeHexColor(parsed[key] as string)
+            if (hex !== undefined) colors[key] = hex
+          }
+        }
+        if (typeof parsed.background === 'string') bg = sanitizeHexColor(parsed.background) ?? null
+        if (typeof parsed.foreground === 'string') fg = sanitizeHexColor(parsed.foreground) ?? null
       }
-      if (typeof parsed.background === 'string') bg = parsed.background
-      if (typeof parsed.foreground === 'string') fg = parsed.foreground
     } catch { /* no dedicated theme file */ }
 
     try {
-      const target = await this.ctx.fs.resolve('.vscode/settings.json', { cwd: policy.workspaceRoot })
-      const parsed = JSON.parse(await this.ctx.fs.readText(target)) as Record<string, unknown>
-      const tcc = (parsed['editor.tokenColorCustomizations'] ?? {}) as Record<string, unknown>
-      const wcc = (parsed['workbench.colorCustomizations'] ?? {}) as Record<string, unknown>
-      const map: Array<[keyof PreviewThemeColors, string]> = [
-        ['keyword', 'keywords'], ['string', 'strings'], ['number', 'numbers'], ['comment', 'comments'],
-        ['function', 'functions'], ['type', 'types'], ['variable', 'variables'],
-      ]
-      for (const [mine, theirs] of map) {
-        if (colors[mine] === undefined && typeof tcc[theirs] === 'string') colors[mine] = tcc[theirs] as string
+      const parsed = await this.readJsonBounded('.vscode/settings.json', policy.workspaceRoot)
+      if (parsed) {
+        const tcc = (parsed['editor.tokenColorCustomizations'] ?? {}) as Record<string, unknown>
+        const wcc = (parsed['workbench.colorCustomizations'] ?? {}) as Record<string, unknown>
+        const map: Array<[keyof PreviewThemeColors, string]> = [
+          ['keyword', 'keywords'], ['string', 'strings'], ['number', 'numbers'], ['comment', 'comments'],
+          ['function', 'functions'], ['type', 'types'], ['variable', 'variables'],
+        ]
+        for (const [mine, theirs] of map) {
+          if (colors[mine] === undefined && typeof tcc[theirs] === 'string') {
+            const hex = sanitizeHexColor(tcc[theirs] as string)
+            if (hex !== undefined) colors[mine] = hex
+          }
+        }
+        if (bg === null && typeof wcc['editor.background'] === 'string') {
+          bg = sanitizeHexColor(wcc['editor.background'] as string) ?? null
+        }
+        if (fg === null && typeof wcc['editor.foreground'] === 'string') {
+          fg = sanitizeHexColor(wcc['editor.foreground'] as string) ?? null
+        }
       }
-      if (bg === null && typeof wcc['editor.background'] === 'string') bg = wcc['editor.background'] as string
-      if (fg === null && typeof wcc['editor.foreground'] === 'string') fg = wcc['editor.foreground'] as string
     } catch { /* no vscode settings */ }
 
     const payload: ThemePayload = { colors, bg, fg }
@@ -306,20 +348,24 @@ export class FilePreviewService extends TypertRemoteService {
     let tabsSet = false
 
     try {
-      const target = await this.ctx.fs.resolve('preview.config.json', { cwd: policy.workspaceRoot })
-      const parsed = JSON.parse(await this.ctx.fs.readText(target)) as Record<string, unknown>
-      if (typeof parsed.indentSize === 'number') { cfg.indentSize = parsed.indentSize; indentSet = true }
-      if (typeof parsed.useTabs === 'boolean') { cfg.useTabs = parsed.useTabs; tabsSet = true }
-      if (typeof parsed.pollInterval === 'number') cfg.pollInterval = parsed.pollInterval
-      if (typeof parsed.fontSize === 'number') cfg.fontSize = parsed.fontSize
-      if (typeof parsed.fontFamily === 'string') cfg.fontFamily = parsed.fontFamily
+      const parsed = await this.readJsonBounded('preview.config.json', policy.workspaceRoot)
+      if (parsed) {
+        if (typeof parsed.indentSize === 'number') { cfg.indentSize = parsed.indentSize; indentSet = true }
+        if (typeof parsed.useTabs === 'boolean') { cfg.useTabs = parsed.useTabs; tabsSet = true }
+        if (typeof parsed.pollInterval === 'number') cfg.pollInterval = clampPollInterval(parsed.pollInterval)
+        if (typeof parsed.fontSize === 'number') cfg.fontSize = parsed.fontSize
+        if (typeof parsed.fontFamily === 'string') {
+          const font = sanitizeFontFamily(parsed.fontFamily)
+          if (font !== undefined) cfg.fontFamily = font
+        }
+      }
     } catch { /* no dedicated config */ }
 
     let prettier: Record<string, unknown> | null = null
     for (const path of ['.prettierrc', '.prettierrc.json', 'package.json']) {
       try {
-        const target = await this.ctx.fs.resolve(path, { cwd: policy.workspaceRoot })
-        const parsed = JSON.parse(await this.ctx.fs.readText(target)) as Record<string, unknown>
+        const parsed = await this.readJsonBounded(path, policy.workspaceRoot)
+        if (!parsed) continue
         prettier = path === 'package.json' ? (parsed.prettier as Record<string, unknown> | null) : parsed
         if (prettier) break
       } catch { /* try next */ }
